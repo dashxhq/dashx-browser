@@ -1,0 +1,35 @@
+{
+  "name": "@dashx/web",
+  "title": "dashx-web",
+  "version": "0.1.20",
+  "description": "DashX SDK for Browser",
+  "main": "dist/index.js",
+  "module": "dist/web.esm.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdx build --tsconfig tsconfig.json",
+    "start": "tsdx watch --tsconfig tsconfig.json --verbose --noClean"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dashxhq/dashx-js",
+    "baseUrl": "https://github.com/dashxhq/dashx-js"
+  },
+  "keywords": [
+    "dashx"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^5.29.0",
+    "@typescript-eslint/parser": "^5.29.0",
+    "eslint": "^8.18.0",
+    "eslint-config-airbnb-typescript": "^17.0.0",
+    "eslint-plugin-import": "^2.26.0",
+    "tsdx": "^0.14.1",
+    "typescript": "^4.7.4",
+    "unfetch": "^4.2.0",
+    "uuid-random": "^1.3.2"
+  }
+}
