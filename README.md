@@ -163,10 +163,10 @@ dx.reset();
 - Make sure all the dependencies are installed:
 
 ```sh
-$ lerna bootstrap
+$ yarn install
 ```
 
-- To start dev server with hot reload: 
+- To start dev server with hot reload:
 
 ```sh
 $ yarn start
@@ -184,5 +184,5 @@ yarn build
 
 ```sh
 yarn publish
-git push origin master
+git push origin main
 ```
