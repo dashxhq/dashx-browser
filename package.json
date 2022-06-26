@@ -1,10 +1,10 @@
 {
-  "name": "@dashx/web",
-  "title": "dashx-web",
-  "version": "0.1.20",
+  "name": "@dashx/browser",
+  "title": "dashx-browser",
+  "version": "0.1.21",
   "description": "DashX SDK for Browser",
   "main": "dist/index.js",
-  "module": "dist/web.esm.js",
+  "module": "dist/browser.esm.js",
   "files": [
     "dist"
   ],
@@ -14,8 +14,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dashxhq/dashx-js",
-    "baseUrl": "https://github.com/dashxhq/dashx-js"
+    "url": "git+https://github.com/dashxhq/dashx-browser"
   },
   "keywords": [
     "dashx"
