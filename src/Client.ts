@@ -45,6 +45,7 @@ class Client {
     this.targetEnvironment = targetEnvironment
     this.context = generateContext()
     this.generateAnonymousUid()
+    this.checkIdentity()
   }
 
   private generateAnonymousUid(regenerate = false): void {
@@ -80,6 +81,14 @@ class Client {
     return Promise.reject(response.errors)
   }
 
+  private checkIdentity() {
+    const uid =  getItem('dashx_uid')
+    if(uid) this.accountUid = uid
+
+    const token = getItem('dashx_token')
+    if(token) this.identityToken = token
+  }
+
   identify(): Promise<Response>
   identify(uid: string): void
   identify(options: IdentifyParams): Promise<Response>
@@ -104,11 +113,16 @@ class Client {
   setIdentity(uid: string, token?: string): void {
     this.accountUid = uid
     this.identityToken = token
+    setItem('dashx_uid', this.accountUid)
+    if(this.identityToken) setItem('dashx_token', this.identityToken)
   }
 
   reset(): void {
     this.accountUid = null
+    this.identityToken = undefined
     this.generateAnonymousUid(true)
+    setItem('dashx_uid', null)
+    setItem('dashx_token', null)
   }
 
   track(event: string, data?: Record<string, any>): Promise<Response> {
