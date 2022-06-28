@@ -12,7 +12,6 @@ import type { ContentOptions, FetchContentOptions } from './ContentOptionsBuilde
 type ClientParams = {
   publicKey: string,
   baseUri?: string,
-  targetInstallation?: string,
   targetEnvironment?: string,
   accountType?: string
 }
@@ -30,8 +29,6 @@ class Client {
 
   accountUid: string | null = null
 
-  targetInstallation?: string
-
   targetEnvironment?: string
 
   identityToken?: string
@@ -42,11 +39,10 @@ class Client {
 
   baseUri: string
 
-  constructor({ publicKey, baseUri = 'https://api.dashx.com/graphql', targetEnvironment, targetInstallation }: ClientParams) {
+  constructor({ publicKey, baseUri = 'https://api.dashx.com/graphql', targetEnvironment }: ClientParams) {
     this.baseUri = baseUri
     this.publicKey = publicKey
     this.targetEnvironment = targetEnvironment
-    this.targetInstallation = targetInstallation
     this.context = generateContext()
     this.generateAnonymousUid()
   }
@@ -68,7 +64,6 @@ class Client {
       headers: {
         'Content-Type': 'application/json',
         'X-Public-Key': this.publicKey,
-        ...(this.targetInstallation ? { 'X-Target-Installation': this.targetInstallation } : {}),
         ...(this.targetEnvironment ? { 'X-Target-Environment': this.targetEnvironment } : {}),
         ...(this.identityToken ? { 'X-Identity-Token': this.identityToken } : {})
       },
