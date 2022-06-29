@@ -53,7 +53,7 @@ class Client {
   }
 
   private set accountUid(uid: string | number | null) {
-    if(uid == null) this.#accountUid = uid
+    if (uid == null) this.#accountUid = uid
     else this.#accountUid = String(uid)
     setItem('accountUid', this.#accountUid)
   }
@@ -63,7 +63,7 @@ class Client {
   }
 
   private set identityToken(token: string | number | null) {
-    if(token == null) this.#identityToken = token
+    if (token == null) this.#identityToken = token
     else this.#identityToken = String(token)
     setItem('identityToken', this.#identityToken)
   }
@@ -127,9 +127,9 @@ class Client {
       .then((res) => res?.identifyAccount)
   }
 
-  setIdentity(uid: string, token?: string): void {
+  setIdentity(uid: string, token: string): void {
     this.accountUid = uid
-    this.identityToken = token || null
+    this.identityToken = token
   }
 
   reset(): void {
