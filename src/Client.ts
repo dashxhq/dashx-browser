@@ -48,7 +48,7 @@ class Client {
   }
 
   private set accountAnonymousUid(uid: string) {
-    if (!uuid.test(uid)) throw new Error('Uid should be valid')
+    if (!uuid.test(uid)) throw new Error('Anonymous UID must be a valid UUID')
     this.#accountAnonymousUid = uid
     setItem('accountAnonymousUid', this.#accountAnonymousUid)
   }
