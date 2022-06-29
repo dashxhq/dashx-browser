@@ -20,6 +20,10 @@
     "dashx"
   ],
   "license": "MIT",
+  "dependencies": {
+    "unfetch": "^4.2.0",
+    "uuid-random": "^1.3.2"
+  },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^5.29.0",
     "@typescript-eslint/parser": "^5.29.0",
@@ -27,8 +31,6 @@
     "eslint-config-airbnb-typescript": "^17.0.0",
     "eslint-plugin-import": "^2.26.0",
     "tsdx": "^0.14.1",
-    "typescript": "^4.7.4",
-    "unfetch": "^4.2.0",
-    "uuid-random": "^1.3.2"
+    "typescript": "^4.7.4"
   }
 }
