@@ -27,11 +27,11 @@ type ContactStubInputType = {
 class Client {
   accountAnonymousUid: string | null = null
 
-  accountUid: string | null = null
+  #accountUid: string | null = null
 
   targetEnvironment?: string
 
-  identityToken?: string
+  #identityToken: string | null = null
 
   context: Context
 
@@ -46,6 +46,26 @@ class Client {
     this.context = generateContext()
     this.generateAnonymousUid()
     this.checkIdentity()
+  }
+
+  get accountUid(): string | null {
+    return this.#accountUid
+  }
+
+  private set accountUid(uid: string | number | null) {
+    if(uid == null) this.#accountUid = uid
+    else this.#accountUid = String(uid)
+    setItem('accountUid', this.#accountUid)
+  }
+
+  get identityToken(): string | null {
+    return this.#identityToken
+  }
+
+  private set identityToken(token: string | number | null) {
+    if(token == null) this.#identityToken = token
+    else this.#identityToken = String(token)
+    setItem('identityToken', this.#identityToken)
   }
 
   private generateAnonymousUid(regenerate = false): void {
@@ -82,11 +102,8 @@ class Client {
   }
 
   private checkIdentity() {
-    const uid =  getItem('dashx_uid')
-    if(uid) this.accountUid = uid
-
-    const token = getItem('dashx_token')
-    if(token) this.identityToken = token
+    this.accountUid =  getItem('accountUid') || null
+    this.identityToken = getItem('identityToken') || null
   }
 
   identify(): Promise<Response>
@@ -112,17 +129,13 @@ class Client {
 
   setIdentity(uid: string, token?: string): void {
     this.accountUid = uid
-    this.identityToken = token
-    setItem('dashx_uid', this.accountUid)
-    if(this.identityToken) setItem('dashx_token', this.identityToken)
+    this.identityToken = token || null
   }
 
   reset(): void {
     this.accountUid = null
-    this.identityToken = undefined
+    this.identityToken = null
     this.generateAnonymousUid(true)
-    setItem('dashx_uid', null)
-    setItem('dashx_token', null)
   }
 
   track(event: string, data?: Record<string, any>): Promise<Response> {
