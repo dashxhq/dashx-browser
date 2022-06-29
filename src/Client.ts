@@ -44,11 +44,7 @@ class Client {
     this.publicKey = publicKey
     this.targetEnvironment = targetEnvironment
     this.context = generateContext()
-    this.checkIdentity()
-  }
-
-  getAccountAnonymousUid(): string {
-    return this.#accountAnonymousUid
+    this.loadIdentity()
   }
 
   private set accountAnonymousUid(uid: string) {
@@ -57,18 +53,10 @@ class Client {
     setItem('accountAnonymousUid', this.#accountAnonymousUid)
   }
 
-  getAccountUid(): string | null {
-    return this.#accountUid
-  }
-
   private set accountUid(uid: string | number | null) {
     if (uid == null) this.#accountUid = uid
     else this.#accountUid = String(uid)
     setItem('accountUid', this.#accountUid)
-  }
-
-  getIdentityToken(): string | null {
-    return this.#identityToken
   }
 
   private set identityToken(token: string | null) {
@@ -99,7 +87,7 @@ class Client {
     return Promise.reject(response.errors)
   }
 
-  private checkIdentity() {
+  private loadIdentity() {
     this.accountAnonymousUid = getItem('accountAnonymousUid') || uuid()
     this.accountUid = getItem('accountUid') || null
     this.identityToken = getItem('identityToken') || null
