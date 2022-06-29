@@ -25,13 +25,13 @@ type ContactStubInputType = {
 }
 
 class Client {
-  accountAnonymousUid: string | null = null
+  #accountAnonymousUid!: string
 
   #accountUid: string | null = null
 
-  targetEnvironment?: string
-
   #identityToken: string | null = null
+
+  targetEnvironment?: string
 
   context: Context
 
@@ -44,11 +44,20 @@ class Client {
     this.publicKey = publicKey
     this.targetEnvironment = targetEnvironment
     this.context = generateContext()
-    this.generateAnonymousUid()
     this.checkIdentity()
   }
 
-  get accountUid(): string | null {
+  getAccountAnonymousUid(): string {
+    return this.#accountAnonymousUid
+  }
+
+  private set accountAnonymousUid(uid: string) {
+    if (!uuid.test(uid)) throw new Error('Uid should be valid')
+    this.#accountAnonymousUid = uid
+    setItem('accountAnonymousUid', this.#accountAnonymousUid)
+  }
+
+  getAccountUid(): string | null {
     return this.#accountUid
   }
 
@@ -58,25 +67,14 @@ class Client {
     setItem('accountUid', this.#accountUid)
   }
 
-  get identityToken(): string | null {
+  getIdentityToken(): string | null {
     return this.#identityToken
   }
 
-  private set identityToken(token: string | number | null) {
+  private set identityToken(token: string | null) {
     if (token == null) this.#identityToken = token
     else this.#identityToken = String(token)
     setItem('identityToken', this.#identityToken)
-  }
-
-  private generateAnonymousUid(regenerate = false): void {
-    const accountAnonymousUid = getItem('accountAnonymousUid')
-    if (!regenerate && accountAnonymousUid) {
-      this.accountAnonymousUid = accountAnonymousUid
-      return
-    }
-
-    this.accountAnonymousUid = uuid()
-    setItem('accountAnonymousUid', this.accountAnonymousUid)
   }
 
   private async makeHttpRequest(request: string, params: any): Promise<any> {
@@ -86,7 +84,7 @@ class Client {
         'Content-Type': 'application/json',
         'X-Public-Key': this.publicKey,
         ...(this.targetEnvironment ? { 'X-Target-Environment': this.targetEnvironment } : {}),
-        ...(this.identityToken ? { 'X-Identity-Token': this.identityToken } : {})
+        ...(this.#identityToken ? { 'X-Identity-Token': this.#identityToken } : {})
       },
       body: JSON.stringify({
         query: request,
@@ -102,7 +100,8 @@ class Client {
   }
 
   private checkIdentity() {
-    this.accountUid =  getItem('accountUid') || null
+    this.accountAnonymousUid = getItem('accountAnonymousUid') || uuid()
+    this.accountUid = getItem('accountUid') || null
     this.identityToken = getItem('identityToken') || null
   }
 
@@ -119,7 +118,7 @@ class Client {
 
     const params = {
       uid: options?.uid,
-      anonymousUid: this.accountAnonymousUid,
+      anonymousUid: this.#accountAnonymousUid,
       ...options
     }
 
@@ -132,18 +131,22 @@ class Client {
     this.identityToken = token
   }
 
+  setAnonymousIdentity(uid: string): void {
+    this.accountAnonymousUid = uid
+  }
+
   reset(): void {
+    this.accountAnonymousUid = uuid()
     this.accountUid = null
     this.identityToken = null
-    this.generateAnonymousUid(true)
   }
 
   track(event: string, data?: Record<string, any>): Promise<Response> {
     const params = {
       event,
       data,
-      accountUid: this.accountUid,
-      accountAnonymousUid: this.accountAnonymousUid
+      accountUid: this.#accountUid,
+      accountAnonymousUid: this.#accountAnonymousUid
     }
 
     return this.makeHttpRequest(trackEventRequest, params)
@@ -229,8 +232,8 @@ class Client {
     const params = {
       custom,
       ...options,
-      accountUid: this.accountUid,
-      accountAnonymousUid: this.accountAnonymousUid
+      accountUid: this.#accountUid,
+      accountAnonymousUid: this.#accountAnonymousUid
     }
 
     const response = await this.makeHttpRequest(addItemToCartRequest, params)
@@ -240,8 +243,8 @@ class Client {
   async applyCouponToCart(options: { couponCode: string }): Promise<any> {
     const params = {
       ...options,
-      accountUid: this.accountUid,
-      accountAnonymousUid: this.accountAnonymousUid
+      accountUid: this.#accountUid,
+      accountAnonymousUid: this.#accountAnonymousUid
     }
 
     const response = await this.makeHttpRequest(applyCouponToCartRequest, params)
@@ -251,8 +254,8 @@ class Client {
   async removeCouponFromCart(options: { couponCode: string }): Promise<any> {
     const params = {
       ...options,
-      accountUid: this.accountUid,
-      accountAnonymousUid: this.accountAnonymousUid
+      accountUid: this.#accountUid,
+      accountAnonymousUid: this.#accountAnonymousUid
     }
 
     const response = await this.makeHttpRequest(removeCouponFromCartRequest, params)
@@ -262,8 +265,8 @@ class Client {
   async fetchCart(options: { orderId?: string }): Promise<any> {
     const params = {
       ...options,
-      accountUid: this.accountUid,
-      accountAnonymousUid: this.accountAnonymousUid
+      accountUid: this.#accountUid,
+      accountAnonymousUid: this.#accountAnonymousUid
     }
 
     const response = await this.makeHttpRequest(fetchCartRequest, params)
@@ -273,8 +276,8 @@ class Client {
   async transferCart(options: { orderId?: string }): Promise<any> {
     const params = {
       ...options,
-      accountUid: this.accountUid,
-      accountAnonymousUid: this.accountAnonymousUid
+      accountUid: this.#accountUid,
+      accountAnonymousUid: this.#accountAnonymousUid
     }
 
     const response = await this.makeHttpRequest(transferCartRequest, params)
