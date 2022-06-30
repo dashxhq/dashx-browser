@@ -54,14 +54,20 @@ class Client {
   }
 
   private set accountUid(uid: string | number | null) {
-    if (uid == null) this.#accountUid = uid
-    else this.#accountUid = String(uid)
+    if (uid == null) {
+      this.#accountUid = uid
+    } else {
+      this.#accountUid = String(uid)
+    }
     setItem('accountUid', this.#accountUid)
   }
 
   private set identityToken(token: string | null) {
-    if (token == null) this.#identityToken = token
-    else this.#identityToken = String(token)
+    if (token == null) {
+      this.#identityToken = token
+    } else {
+      this.#identityToken = String(token)
+    }
     setItem('identityToken', this.#identityToken)
   }
 
