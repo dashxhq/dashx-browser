@@ -3,7 +3,7 @@
     <a href="https://dashx.com"><img src="https://raw.githubusercontent.com/dashxhq/brand-book/master/assets/logo-black-text-color-icon@2x.png" alt="DashX" height="40" /></a>
     <br />
     <br />
-    <strong>All-in-one admin panel for product teams.</strong>
+    <strong>Your All-in-One Product Stack</strong>
 </p>
 
 <div align="center">
@@ -12,7 +12,7 @@
     <span> | </span>
     <a href="https://dashxdemo.com">Demos</a>
     <span> | </span>
-    <a href="https://docs.dashx.com">Documentation</a>
+    <a href="https://docs.dashx.com/developer">Documentation</a>
   </h4>
 </div>
 
@@ -30,7 +30,7 @@ npm install @dashx/browser
 ```
 
 **yarn**
-```
+```sh
 yarn add @dashx/browser
 ```
 
@@ -43,13 +43,13 @@ For detailed usage, refer to the [documentation](https://docs.dashx.com).
 - Make sure all the dependencies are installed:
 
 ```sh
-$ yarn install
+yarn install
 ```
 
 - To start dev server with hot reload:
 
 ```sh
-$ yarn start
+yarn start
 ```
 
 This will run a dev server that logs out errors and warnings and reloads itself on any file save.
