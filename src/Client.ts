@@ -272,18 +272,18 @@ class Client {
     return response?.transferCart
   }
 
-  async fetchStoredPreferences(uid: string): Promise<any> {
+  async fetchStoredPreferences(): Promise<any> {
     const params = {
-      accountUid: uid
+      accountUid: this.#accountUid
     }
 
     const response = await this.makeHttpRequest(fetchStoredPreferencesRequest, params)
     return response?.fetchStoredPreferences.preferenceData
   }
 
-  async saveStoredPreferences(uid: string, preferenceData: any): Promise<any> {
+  async saveStoredPreferences(preferenceData: any): Promise<any> {
     const params = {
-      accountUid: uid,
+      accountUid: this.accountUid,
       preferenceData
     }
 
@@ -291,16 +291,16 @@ class Client {
     return response?.saveStoredPreferences
   }
 
-  async fetchContacts(uid: string): Promise<any> {
-    const params = { uid }
+  async fetchContacts(): Promise<any> {
+    const params = { uid: this.#accountUid }
 
     const response = await this.makeHttpRequest(fetchContactsRequest, params)
     return response?.fetchContacts.contacts
   }
 
-  async saveContacts(uid: string, contacts: ContactStubInputType[]): Promise<any> {
+  async saveContacts(contacts: ContactStubInputType[]): Promise<any> {
     const params = {
-      uid,
+      uid: this.#accountUid,
       contacts
     }
 
