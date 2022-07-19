@@ -283,7 +283,7 @@ class Client {
 
   async saveStoredPreferences(preferenceData: any): Promise<any> {
     const params = {
-      accountUid: this.accountUid,
+      accountUid: this.#accountUid,
       preferenceData
     }
 
