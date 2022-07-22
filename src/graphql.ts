@@ -52,6 +52,30 @@ export const fetchContentRequest = `
   }
 `
 
+const item = `
+  id
+  installationId
+  name
+  identifier
+  description
+  createdAt
+  updatedAt
+  pricings {
+    id
+    kind
+    amount
+    originalAmount
+    isRecurring
+    recurringInterval
+    recurringIntervalUnit
+    appleProductIdentifier
+    googleProductIdentifier
+    currencyCode
+    createdAt
+    updatedAt
+  }
+`
+
 const cart = `
   id
   status
@@ -72,6 +96,10 @@ const cart = `
       total
       custom
       currencyCode
+
+      item {
+        ${item}
+      }
   }
 
   couponRedemptions {
