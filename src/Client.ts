@@ -92,10 +92,6 @@ class Client {
     return Promise.reject(response.errors)
   }
 
-  private async makeHttpRequestWithInput(request: string, params: any): Promise<any> {
-    return this.makeHttpRequest(request, { input: params })
-  }
-
   private loadIdentity() {
     this.accountAnonymousUid = getItem('accountAnonymousUid') || uuid()
     this.accountUid = getItem('accountUid') || null
@@ -119,7 +115,7 @@ class Client {
       ...options
     }
 
-    return this.makeHttpRequestWithInput(identifyAccountRequest, params)
+    return this.makeHttpRequest(identifyAccountRequest, { input: params })
       .then((res) => res?.identifyAccount)
   }
 
@@ -146,7 +142,7 @@ class Client {
       accountAnonymousUid: this.#accountAnonymousUid
     }
 
-    return this.makeHttpRequestWithInput(trackEventRequest, params)
+    return this.makeHttpRequest(trackEventRequest, { input: params })
   }
 
   addContent(urn: string, data: Record<string, any>): Promise<Response> {
@@ -161,7 +157,7 @@ class Client {
 
     const params = { content, contentType, data }
 
-    return this.makeHttpRequestWithInput(addContentRequest, params)
+    return this.makeHttpRequest(addContentRequest, { input: params })
   }
 
   editContent(urn: string, data: Record<string, any>): Promise<Response> {
@@ -176,7 +172,7 @@ class Client {
 
     const params = { content, contentType, data }
 
-    return this.makeHttpRequestWithInput(editContentRequest, params)
+    return this.makeHttpRequest(editContentRequest, { input: params })
   }
 
   searchContent(contentType: string): ContentOptionsBuilder
@@ -186,18 +182,18 @@ class Client {
   ): ContentOptionsBuilder | Promise<any> {
     if (!options) {
       return new ContentOptionsBuilder(
-        (wrappedOptions) => this.makeHttpRequestWithInput(
+        (wrappedOptions) => this.makeHttpRequest(
           searchContentRequest,
-          { ...wrappedOptions, contentType }
+          { input: { ...wrappedOptions, contentType } }
         ).then((response) => response?.searchContent)
       )
     }
 
     const filter = parseFilterObject(options.filter)
 
-    const result = this.makeHttpRequestWithInput(
+    const result = this.makeHttpRequest(
       searchContentRequest,
-      { ...options, contentType, filter }
+      { input: { ...options, contentType, filter } }
     ).then((response) => response?.searchContent)
 
     if (options.returnType === 'all') {
@@ -215,7 +211,7 @@ class Client {
     const [ contentType, content ] = urn.split('/')
     const params = { content, contentType, ...options }
 
-    const response = await this.makeHttpRequestWithInput(fetchContentRequest, params)
+    const response = await this.makeHttpRequest(fetchContentRequest, { input: params })
     return response?.fetchContent
   }
 
@@ -233,7 +229,7 @@ class Client {
       accountAnonymousUid: this.#accountAnonymousUid
     }
 
-    const response = await this.makeHttpRequestWithInput(addItemToCartRequest, params)
+    const response = await this.makeHttpRequest(addItemToCartRequest, { input: params })
     return response?.addItemToCart
   }
 
@@ -244,7 +240,7 @@ class Client {
       accountAnonymousUid: this.#accountAnonymousUid
     }
 
-    const response = await this.makeHttpRequestWithInput(applyCouponToCartRequest, params)
+    const response = await this.makeHttpRequest(applyCouponToCartRequest, { input: params })
     return response?.applyCouponToCart
   }
 
@@ -255,7 +251,7 @@ class Client {
       accountAnonymousUid: this.#accountAnonymousUid
     }
 
-    const response = await this.makeHttpRequestWithInput(removeCouponFromCartRequest, params)
+    const response = await this.makeHttpRequest(removeCouponFromCartRequest, { input: params })
     return response?.removeCouponFromCart
   }
 
@@ -266,7 +262,7 @@ class Client {
       accountAnonymousUid: this.#accountAnonymousUid
     }
 
-    const response = await this.makeHttpRequestWithInput(fetchCartRequest, params)
+    const response = await this.makeHttpRequest(fetchCartRequest, { input: params })
     return response?.fetchCart
   }
 
@@ -277,7 +273,7 @@ class Client {
       accountAnonymousUid: this.#accountAnonymousUid
     }
 
-    const response = await this.makeHttpRequestWithInput(transferCartRequest, params)
+    const response = await this.makeHttpRequest(transferCartRequest, { input: params })
     return response?.transferCart
   }
 
@@ -286,7 +282,7 @@ class Client {
       accountUid: this.#accountUid
     }
 
-    const response = await this.makeHttpRequestWithInput(fetchStoredPreferencesRequest, params)
+    const response = await this.makeHttpRequest(fetchStoredPreferencesRequest, { input: params })
     return response?.fetchStoredPreferences.preferenceData
   }
 
@@ -296,14 +292,14 @@ class Client {
       preferenceData
     }
 
-    const response = await this.makeHttpRequestWithInput(saveStoredPreferencesRequest, params)
+    const response = await this.makeHttpRequest(saveStoredPreferencesRequest, { input: params })
     return response?.saveStoredPreferences
   }
 
   async fetchContacts(): Promise<any> {
     const params = { uid: this.#accountUid }
 
-    const response = await this.makeHttpRequestWithInput(fetchContactsRequest, params)
+    const response = await this.makeHttpRequest(fetchContactsRequest, { input: params })
     return response?.fetchContacts.contacts
   }
 
@@ -313,7 +309,7 @@ class Client {
       contacts
     }
 
-    const response = await this.makeHttpRequestWithInput(saveContactsRequest, params)
+    const response = await this.makeHttpRequest(saveContactsRequest, { input: params })
     return response?.saveContacts
   }
 
@@ -323,7 +319,7 @@ class Client {
       externalColumnId: String(externalColumnId)
     }
 
-    const response = await this.makeHttpRequestWithInput(prepareExternalAssetRequest, prepareAssetParams)
+    const response = await this.makeHttpRequest(prepareExternalAssetRequest, { input: prepareAssetParams })
 
     const id = response?.prepareExternalAsset?.id
     const url = response?.prepareExternalAsset?.data?.upload?.url

@@ -211,7 +211,7 @@ export const saveContactsRequest = `
 
 export const prepareExternalAssetRequest = `
   mutation PrepareExternalAsset($input: PrepareExternalAssetInput!) {
-	  prepareExternalAsset(input: $input) {
+    prepareExternalAsset(input: $input) {
       id
       installationId
       externalColumnId
