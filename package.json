@@ -1,7 +1,7 @@
 {
   "name": "@dashx/browser",
   "title": "dashx-browser",
-  "version": "0.1.25",
+  "version": "0.1.27",
   "description": "DashX SDK for Browser",
   "main": "dist/index.js",
   "module": "dist/browser.esm.js",
