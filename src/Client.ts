@@ -24,6 +24,9 @@ type ContactStubInputType = {
   tag: string
 }
 
+const UPLOAD_RETRY_LIMIT = 5
+const UPLOAD_RETRY_TIMEOUT = 3000
+
 type UploadInputType = {
   file: File,
   externalColumnId: string,
@@ -328,18 +331,21 @@ class Client {
       method: 'PUT',
       body: file,
       headers: {
-        'Content-Type': file.type
+        'Content-Type': file.type,
+        'x-goog-meta-origin-id': id
       }
     })
 
-    let tryLefts = 5
+    let retryLefts = UPLOAD_RETRY_LIMIT
     const getExternalAsset = async (): Promise<any> => {
       const response = await this.makeHttpRequest(externalAssetRequest, { id })
       const status = response?.externalAsset?.status
       if (status !== 'ready') {
-        await new Promise(resolve => setTimeout(resolve, 2000))
-        tryLefts--
-        if(!tryLefts) return Promise.reject('Something went wrong.')
+        await new Promise(resolve => setTimeout(resolve, UPLOAD_RETRY_TIMEOUT))
+        retryLefts--
+        if (!retryLefts) {
+          return Promise.reject('Something went wrong.')
+        }
         return getExternalAsset()
       }
       return response?.externalAsset?.data?.asset
