@@ -1,7 +1,7 @@
 import fetch from 'unfetch'
 import uuid from 'uuid-random'
 
-import { addContentRequest, editContentRequest, fetchContentRequest, identifyAccountRequest, searchContentRequest, trackEventRequest, addItemToCartRequest, applyCouponToCartRequest, removeCouponFromCartRequest, fetchCartRequest, transferCartRequest, fetchStoredPreferencesRequest, saveStoredPreferencesRequest, fetchContactsRequest, saveContactsRequest } from './graphql'
+import { addContentRequest, editContentRequest, fetchContentRequest, identifyAccountRequest, searchContentRequest, trackEventRequest, addItemToCartRequest, applyCouponToCartRequest, removeCouponFromCartRequest, fetchCartRequest, transferCartRequest, fetchStoredPreferencesRequest, saveStoredPreferencesRequest, fetchContactsRequest, saveContactsRequest, prepareExternalAssetRequest, externalAssetRequest } from './graphql'
 import generateContext from './context'
 import ContentOptionsBuilder from './ContentOptionsBuilder'
 import { getItem, setItem } from './storage'
@@ -22,6 +22,14 @@ type ContactStubInputType = {
   kind: 'EMAIL' | 'PHONE' | 'IOS' | 'ANDROID' | 'WEB' | 'WHATSAPP',
   value: string,
   tag: string
+}
+
+const UPLOAD_RETRY_LIMIT = 5
+const UPLOAD_RETRY_TIMEOUT = 3000
+
+type UploadInputType = {
+  file: File,
+  externalColumnId: string,
 }
 
 class Client {
@@ -76,7 +84,7 @@ class Client {
       },
       body: JSON.stringify({
         query: request,
-        variables: { input: params }
+        variables: params
       })
     }).then((res) => res.json())
 
@@ -110,7 +118,7 @@ class Client {
       ...options
     }
 
-    return this.makeHttpRequest(identifyAccountRequest, params)
+    return this.makeHttpRequest(identifyAccountRequest, { input: params })
       .then((res) => res?.identifyAccount)
   }
 
@@ -137,7 +145,7 @@ class Client {
       accountAnonymousUid: this.#accountAnonymousUid
     }
 
-    return this.makeHttpRequest(trackEventRequest, params)
+    return this.makeHttpRequest(trackEventRequest, { input: params })
   }
 
   addContent(urn: string, data: Record<string, any>): Promise<Response> {
@@ -152,7 +160,7 @@ class Client {
 
     const params = { content, contentType, data }
 
-    return this.makeHttpRequest(addContentRequest, params)
+    return this.makeHttpRequest(addContentRequest, { input: params })
   }
 
   editContent(urn: string, data: Record<string, any>): Promise<Response> {
@@ -167,7 +175,7 @@ class Client {
 
     const params = { content, contentType, data }
 
-    return this.makeHttpRequest(editContentRequest, params)
+    return this.makeHttpRequest(editContentRequest, { input: params })
   }
 
   searchContent(contentType: string): ContentOptionsBuilder
@@ -179,7 +187,7 @@ class Client {
       return new ContentOptionsBuilder(
         (wrappedOptions) => this.makeHttpRequest(
           searchContentRequest,
-          { ...wrappedOptions, contentType }
+          { input: { ...wrappedOptions, contentType } }
         ).then((response) => response?.searchContent)
       )
     }
@@ -188,7 +196,7 @@ class Client {
 
     const result = this.makeHttpRequest(
       searchContentRequest,
-      { ...options, contentType, filter }
+      { input: { ...options, contentType, filter } }
     ).then((response) => response?.searchContent)
 
     if (options.returnType === 'all') {
@@ -206,7 +214,7 @@ class Client {
     const [ contentType, content ] = urn.split('/')
     const params = { content, contentType, ...options }
 
-    const response = await this.makeHttpRequest(fetchContentRequest, params)
+    const response = await this.makeHttpRequest(fetchContentRequest, { input: params })
     return response?.fetchContent
   }
 
@@ -224,7 +232,7 @@ class Client {
       accountAnonymousUid: this.#accountAnonymousUid
     }
 
-    const response = await this.makeHttpRequest(addItemToCartRequest, params)
+    const response = await this.makeHttpRequest(addItemToCartRequest, { input: params })
     return response?.addItemToCart
   }
 
@@ -235,7 +243,7 @@ class Client {
       accountAnonymousUid: this.#accountAnonymousUid
     }
 
-    const response = await this.makeHttpRequest(applyCouponToCartRequest, params)
+    const response = await this.makeHttpRequest(applyCouponToCartRequest, { input: params })
     return response?.applyCouponToCart
   }
 
@@ -246,7 +254,7 @@ class Client {
       accountAnonymousUid: this.#accountAnonymousUid
     }
 
-    const response = await this.makeHttpRequest(removeCouponFromCartRequest, params)
+    const response = await this.makeHttpRequest(removeCouponFromCartRequest, { input: params })
     return response?.removeCouponFromCart
   }
 
@@ -257,7 +265,7 @@ class Client {
       accountAnonymousUid: this.#accountAnonymousUid
     }
 
-    const response = await this.makeHttpRequest(fetchCartRequest, params)
+    const response = await this.makeHttpRequest(fetchCartRequest, { input: params })
     return response?.fetchCart
   }
 
@@ -268,7 +276,7 @@ class Client {
       accountAnonymousUid: this.#accountAnonymousUid
     }
 
-    const response = await this.makeHttpRequest(transferCartRequest, params)
+    const response = await this.makeHttpRequest(transferCartRequest, { input: params })
     return response?.transferCart
   }
 
@@ -277,7 +285,7 @@ class Client {
       accountUid: this.#accountUid
     }
 
-    const response = await this.makeHttpRequest(fetchStoredPreferencesRequest, params)
+    const response = await this.makeHttpRequest(fetchStoredPreferencesRequest, { input: params })
     return response?.fetchStoredPreferences.preferenceData
   }
 
@@ -287,14 +295,14 @@ class Client {
       preferenceData
     }
 
-    const response = await this.makeHttpRequest(saveStoredPreferencesRequest, params)
+    const response = await this.makeHttpRequest(saveStoredPreferencesRequest, { input: params })
     return response?.saveStoredPreferences
   }
 
   async fetchContacts(): Promise<any> {
     const params = { uid: this.#accountUid }
 
-    const response = await this.makeHttpRequest(fetchContactsRequest, params)
+    const response = await this.makeHttpRequest(fetchContactsRequest, { input: params })
     return response?.fetchContacts.contacts
   }
 
@@ -304,8 +312,46 @@ class Client {
       contacts
     }
 
-    const response = await this.makeHttpRequest(saveContactsRequest, params)
+    const response = await this.makeHttpRequest(saveContactsRequest, { input: params })
     return response?.saveContacts
+  }
+
+  async upload(options: UploadInputType) {
+    const { externalColumnId, file } = options
+    const prepareAssetParams = {
+      externalColumnId: String(externalColumnId)
+    }
+
+    const response = await this.makeHttpRequest(prepareExternalAssetRequest, { input: prepareAssetParams })
+
+    const id = response?.prepareExternalAsset?.id
+    const url = response?.prepareExternalAsset?.data?.upload?.url
+
+    await fetch(url, {
+      method: 'PUT',
+      body: file,
+      headers: {
+        'Content-Type': file.type,
+        'x-goog-meta-origin-id': id
+      }
+    })
+
+    let retryLefts = UPLOAD_RETRY_LIMIT
+    const getExternalAsset = async (): Promise<any> => {
+      const response = await this.makeHttpRequest(externalAssetRequest, { id })
+      const status = response?.externalAsset?.status
+      if (status !== 'ready') {
+        await new Promise(resolve => setTimeout(resolve, UPLOAD_RETRY_TIMEOUT))
+        retryLefts--
+        if (!retryLefts) {
+          return Promise.reject('Something went wrong.')
+        }
+        return getExternalAsset()
+      }
+      return response?.externalAsset?.data?.asset
+    }
+
+    return getExternalAsset()
   }
 }
 

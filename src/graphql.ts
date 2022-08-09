@@ -208,3 +208,28 @@ export const saveContactsRequest = `
     }
   }
 `
+
+export const prepareExternalAssetRequest = `
+  mutation PrepareExternalAsset($input: PrepareExternalAssetInput!) {
+    prepareExternalAsset(input: $input) {
+      id
+      installationId
+      externalColumnId
+      storageProviderId
+      status
+      data
+      createdAt
+      updatedAt
+    }
+  }
+`
+
+export const externalAssetRequest = `
+  query ExternalAsset($id: ID!) {
+    externalAsset(id: $id) {
+      id
+      status
+      data
+    }
+  }
+`
