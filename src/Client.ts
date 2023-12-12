@@ -1,7 +1,7 @@
 import fetch from 'unfetch'
 import uuid from 'uuid-random'
 
-import { addContentRequest, editContentRequest, fetchContentRequest, identifyAccountRequest, searchContentRequest, trackEventRequest, addItemToCartRequest, applyCouponToCartRequest, removeCouponFromCartRequest, fetchCartRequest, transferCartRequest, fetchStoredPreferencesRequest, saveStoredPreferencesRequest, fetchContactsRequest, saveContactsRequest, prepareExternalAssetRequest, externalAssetRequest } from './graphql'
+import { addContentRequest, editContentRequest, fetchContentRequest, identifyAccountRequest, searchContentRequest, trackEventRequest, addItemToCartRequest, applyCouponToCartRequest, removeCouponFromCartRequest, fetchCartRequest, transferCartRequest, fetchStoredPreferencesRequest, saveStoredPreferencesRequest, fetchContactsRequest, saveContactsRequest, prepareAssetRequest, assetRequest } from './graphql'
 import generateContext from './context'
 import ContentOptionsBuilder from './ContentOptionsBuilder'
 import { getItem, setItem } from './storage'
@@ -29,7 +29,8 @@ const UPLOAD_RETRY_TIMEOUT = 3000
 
 type UploadInputType = {
   file: File,
-  externalColumnId: string,
+  resource?: string,
+  attribute?: string
 }
 
 class Client {
@@ -317,15 +318,24 @@ class Client {
   }
 
   async upload(options: UploadInputType) {
-    const { externalColumnId, file } = options
+    const { file, attribute, resource } = options
     const prepareAssetParams = {
-      externalColumnId: String(externalColumnId)
+      name: file.name,
+      size: file.size,
+      mimeType: file.type,
+      attribute,
+      resource,
+      targetEnvironment: this.targetEnvironment
     }
 
-    const response = await this.makeHttpRequest(prepareExternalAssetRequest, { input: prepareAssetParams })
+    const response = await this.makeHttpRequest(prepareAssetRequest, { input: prepareAssetParams })
 
-    const id = response?.prepareExternalAsset?.id
-    const url = response?.prepareExternalAsset?.data?.upload?.url
+    const id = response?.prepareAsset?.id
+    const url = response?.prepareAsset?.data?.upload?.url
+
+    if (!url || !id) {
+      throw new Error('Something went wrong')
+    }
 
     await fetch(url, {
       method: 'PUT',
@@ -337,21 +347,30 @@ class Client {
     })
 
     let retryLefts = UPLOAD_RETRY_LIMIT
-    const getExternalAsset = async (): Promise<any> => {
-      const response = await this.makeHttpRequest(externalAssetRequest, { id })
-      const status = response?.externalAsset?.status
-      if (status !== 'ready') {
+    const checkAsset = async (): Promise<any> => {
+      const asset = await this.getAsset({ id })
+      
+      const status = asset?.uploadStatus
+
+      if (status !== 'UPLOADED') {
         await new Promise(resolve => setTimeout(resolve, UPLOAD_RETRY_TIMEOUT))
         retryLefts--
         if (!retryLefts) {
           return Promise.reject('Something went wrong.')
         }
-        return getExternalAsset()
+        return checkAsset()
       }
-      return response?.externalAsset?.data?.asset
     }
 
-    return getExternalAsset()
+    return checkAsset()
+  }
+
+  async getAsset(options: { id: string }) {
+    const { id } = options
+
+    const response = await this.makeHttpRequest(assetRequest, { id })
+
+    return response?.asset
   }
 }
 

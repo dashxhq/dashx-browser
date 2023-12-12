@@ -209,27 +209,46 @@ export const saveContactsRequest = `
   }
 `
 
-export const prepareExternalAssetRequest = `
-  mutation PrepareExternalAsset($input: PrepareExternalAssetInput!) {
-    prepareExternalAsset(input: $input) {
-      id
-      installationId
-      externalColumnId
-      storageProviderId
-      status
-      data
+export const prepareAssetRequest = `
+  mutation prepareAsset($input: PrepareAssetInput!) {
+    prepareAsset(input: $input) {
+      attributeId
       createdAt
+      data
+      id
+      mimeType
+      name
+      processingStatus
+      resourceId
+      size
+      storageProviderId
       updatedAt
+      uploadStatus
+      uploaderId
+      url
+      workspaceId
     }
   }
 `
 
-export const externalAssetRequest = `
-  query ExternalAsset($id: ID!) {
-    externalAsset(id: $id) {
-      id
-      status
+export const assetRequest = `
+  query Asset($id: ID!) {
+    asset(id: $id) {
+      attributeId
+      createdAt
       data
+      id
+      mimeType
+      name
+      processingStatus
+      resourceId
+      size
+      storageProviderId
+      updatedAt
+      uploadStatus
+      uploaderId
+      url
+      workspaceId
     }
   }
 `
