@@ -54,7 +54,6 @@ export const fetchContentRequest = `
 
 const item = `
   id
-  installationId
   name
   identifier
   description
