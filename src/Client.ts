@@ -333,7 +333,7 @@ class Client {
     const id = response?.prepareAsset?.id
     const url = response?.prepareAsset?.data?.upload?.url
 
-    if (!url) {
+    if (!url || !id) {
       throw new Error('Something went wrong')
     }
 
