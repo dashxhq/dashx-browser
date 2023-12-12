@@ -333,6 +333,10 @@ class Client {
     const id = response?.prepareAsset?.id
     const url = response?.prepareAsset?.data?.upload?.url
 
+    if (!url) {
+      throw new Error('Something went wrong')
+    }
+
     await fetch(url, {
       method: 'PUT',
       body: file,
