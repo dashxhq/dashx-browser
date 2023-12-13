@@ -349,17 +349,17 @@ class Client {
     let retryLefts = UPLOAD_RETRY_LIMIT
     const checkAsset = async (): Promise<any> => {
       const asset = await this.getAsset({ id })
-      
+
       const status = asset?.uploadStatus
 
-      if (status !== 'UPLOADED') {
-        await new Promise(resolve => setTimeout(resolve, UPLOAD_RETRY_TIMEOUT))
-        retryLefts--
-        if (!retryLefts) {
-          return Promise.reject('Something went wrong.')
-        }
-        return checkAsset()
+      if (status === 'UPLOADED') return Promise.resolve(asset)
+
+      await new Promise(resolve => setTimeout(resolve, UPLOAD_RETRY_TIMEOUT))
+      retryLefts--
+      if (!retryLefts) {
+        return Promise.reject('Something went wrong.')
       }
+      return checkAsset()
     }
 
     return checkAsset()
