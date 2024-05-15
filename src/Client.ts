@@ -1,19 +1,38 @@
 import fetch from 'unfetch'
 import uuid from 'uuid-random'
 
-import { addContentRequest, editContentRequest, fetchContentRequest, identifyAccountRequest, searchContentRequest, trackEventRequest, addItemToCartRequest, applyCouponToCartRequest, removeCouponFromCartRequest, fetchCartRequest, transferCartRequest, fetchStoredPreferencesRequest, saveStoredPreferencesRequest, fetchContactsRequest, saveContactsRequest, prepareAssetRequest, assetRequest } from './graphql'
-import generateContext from './context'
+import {
+  addContentRequest,
+  addItemToCartRequest,
+  applyCouponToCartRequest,
+  assetRequest,
+  editContentRequest,
+  fetchCartRequest,
+  fetchContactsRequest,
+  fetchContentRequest,
+  fetchStoredPreferencesRequest,
+  identifyAccountRequest,
+  inAppNotificationRecipientsListRequest,
+  prepareAssetRequest,
+  removeCouponFromCartRequest,
+  saveContactsRequest,
+  saveStoredPreferencesRequest,
+  searchContentRequest,
+  trackEventRequest,
+  trackNotificationRequest,
+  transferCartRequest
+} from './graphql'
 import ContentOptionsBuilder from './ContentOptionsBuilder'
+import generateContext from './context'
 import { getItem, setItem } from './storage'
 import { parseFilterObject } from './utils'
-import type { Context } from './context'
 import type { ContentOptions, FetchContentOptions } from './ContentOptionsBuilder'
+import type { Context } from './context'
 
 type ClientParams = {
   publicKey: string,
   baseUri?: string,
-  targetEnvironment?: string,
-  accountType?: string
+  targetEnvironment?: string
 }
 
 type IdentifyParams = Record<string, any>
@@ -33,12 +52,20 @@ type UploadInputType = {
   attribute?: string
 }
 
+type TrackNotificationInputType = {
+  id: string,
+  status: 'DELIVERED' | 'DISMISSED' | 'OPENED' | 'CLICKED',
+  timestamp?: Date
+}
+
 class Client {
   #accountAnonymousUid!: string
 
   #accountUid: string | null = null
 
   #identityToken: string | null = null
+
+  #inAppChannel: string | null = null
 
   targetEnvironment?: string
 
@@ -56,22 +83,49 @@ class Client {
     this.loadIdentity()
   }
 
+  get accountAnonymousUid(): string | null {
+    return this.#accountUid;
+  }
+
   private set accountAnonymousUid(uid: string) {
-    if (!uuid.test(uid)) throw new Error('Anonymous UID must be a valid UUID')
+    if (!uuid.test(uid)) {
+      throw new Error('Anonymous UID must be a valid UUID')
+    }
+
     this.#accountAnonymousUid = uid
     setItem('accountAnonymousUid', this.#accountAnonymousUid)
   }
 
+  get accountUid(): string | null {
+    return this.#accountUid;
+  }
+
   private set accountUid(uid: string | number | null) {
-    if (uid == null) this.#accountUid = uid
-    else this.#accountUid = String(uid)
+    if (uid == null) {
+      this.#accountUid = uid
+    } else {
+      this.#accountUid = String(uid)
+    }
+
     setItem('accountUid', this.#accountUid)
   }
 
   private set identityToken(token: string | null) {
-    if (token == null) this.#identityToken = token
-    else this.#identityToken = String(token)
+    if (token == null) {
+      this.#identityToken = token
+    } else {
+      this.#identityToken = String(token)
+    }
+
     setItem('identityToken', this.#identityToken)
+  }
+
+  private set inAppChannel(channel: string | null) {
+    if (channel == null) {
+      this.#inAppChannel = channel
+    } else {
+      this.#identityToken = String(channel)
+    }
   }
 
   private async makeHttpRequest(request: string, params: any): Promise<any> {
@@ -100,6 +154,7 @@ class Client {
     this.accountAnonymousUid = getItem('accountAnonymousUid') || uuid()
     this.accountUid = getItem('accountUid') || null
     this.identityToken = getItem('identityToken') || null
+    this.inAppChannel = `dashx:account:${this.identityToken}`
   }
 
   identify(): Promise<Response>
@@ -136,6 +191,7 @@ class Client {
     this.accountAnonymousUid = uuid()
     this.accountUid = null
     this.identityToken = null
+    this.#inAppChannel = null
   }
 
   track(event: string, data?: Record<string, any>): Promise<Response> {
@@ -147,6 +203,14 @@ class Client {
     }
 
     return this.makeHttpRequest(trackEventRequest, { input: params })
+  }
+
+  trackNotification({ id, status, timestamp }: TrackNotificationInputType): Promise<Response> {
+    return this.makeHttpRequest(trackNotificationRequest, { input: { id, status, timestamp: timestamp || new Date() } })
+  }
+
+  getInAppNotifications(): Promise<Response> {
+    return this.makeHttpRequest(inAppNotificationRecipientsListRequest, { filter: { channel: this.#inAppChannel }})
   }
 
   addContent(urn: string, data: Record<string, any>): Promise<Response> {

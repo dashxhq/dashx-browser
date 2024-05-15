@@ -6,6 +6,30 @@ export const trackEventRequest = `
   }
 `
 
+export const trackNotificationRequest = `
+  mutation TrackNotification($input: TrackNotificationInput!) {
+    trackNotification(input: $input) {
+        success
+    }
+  }
+`
+
+export const inAppNotificationRecipientsListRequest = `
+  query NotificationRecipientsList($filter: JSON!) {
+    notificationRecipientsList(filter: $filter) {
+        id
+        notificationId
+        contact
+        readAt
+
+        notification {
+            id
+            renderedContent
+        }
+    }
+  }
+`
+
 export const identifyAccountRequest = `
   mutation IdentifyAccount($input: IdentifyAccountInput!) {
     identifyAccount(input: $input) {
