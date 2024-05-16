@@ -4,7 +4,9 @@
   "version": "0.1.30",
   "description": "DashX SDK for Browser",
   "type": "module",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "main": "./dist/index.umd.js",
   "module": "./dist/index.es.js",
   "types": "./dist/index.es.d.ts",

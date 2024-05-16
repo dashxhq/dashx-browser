@@ -14,11 +14,11 @@ export default defineConfig({
     },
     sourcemap: false,
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        exports: 'named'
+      }
+    }
   },
-  plugins: [ dts({ rollupTypes: true })],
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
-  },
+  plugins: [ dts({ rollupTypes: true })]
 })

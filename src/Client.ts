@@ -12,7 +12,7 @@ import {
   fetchContentRequest,
   fetchStoredPreferencesRequest,
   identifyAccountRequest,
-  inAppNotificationRecipientsListRequest,
+  notificationRecipientsListRequest,
   prepareAssetRequest,
   removeCouponFromCartRequest,
   saveContactsRequest,
@@ -29,6 +29,9 @@ import { parseFilterObject } from './utils'
 import type { ContentOptions, FetchContentOptions } from './ContentOptionsBuilder'
 import type { Context } from './context'
 
+const UPLOAD_RETRY_LIMIT = 5
+const UPLOAD_RETRY_TIMEOUT = 3000
+
 type ClientParams = {
   publicKey: string,
   baseUri?: string,
@@ -43,8 +46,6 @@ type ContactStubInputType = {
   tag: string
 }
 
-const UPLOAD_RETRY_LIMIT = 5
-const UPLOAD_RETRY_TIMEOUT = 3000
 
 type UploadInputType = {
   file: File,
@@ -56,6 +57,45 @@ type TrackNotificationInputType = {
   id: string,
   status: 'DELIVERED' | 'DISMISSED' | 'OPENED' | 'CLICKED',
   timestamp?: Date
+}
+
+interface InvalidData {
+  message: string
+}
+
+interface InAppNotificationData {
+  body: string,
+  notificationId: string
+}
+
+interface SubscribeData {
+  accountUid: string
+}
+
+enum WebsocketMessageType {
+  SUBSCRIBE = 'SUBSCRIBE',
+  IN_APP_NOTIFICATION = 'IN_APP_NOTIFICATION',
+  INVALID = 'INVALID'
+}
+
+type WebsocketMessage =
+  | { type: WebsocketMessageType.SUBSCRIBE; data: SubscribeData }
+  | { type: WebsocketMessageType.IN_APP_NOTIFICATION; data: InAppNotificationData }
+  | { type: WebsocketMessageType.INVALID; data: InvalidData }
+
+type InAppNotification = {
+  id: String
+  renderedContent: {
+    body: String
+  }
+}
+
+type InAppNotificationRecipient = {
+  id: String,
+  notificationId: String,
+  contact: String,
+  readAt: String
+  notification: InAppNotification
 }
 
 class Client {
@@ -84,7 +124,7 @@ class Client {
   }
 
   get accountAnonymousUid(): string | null {
-    return this.#accountUid;
+    return this.#accountAnonymousUid;
   }
 
   private set accountAnonymousUid(uid: string) {
@@ -110,6 +150,10 @@ class Client {
     setItem('accountUid', this.#accountUid)
   }
 
+  get identityToken(): string | null {
+    return this.#identityToken;
+  }
+
   private set identityToken(token: string | null) {
     if (token == null) {
       this.#identityToken = token
@@ -118,6 +162,10 @@ class Client {
     }
 
     setItem('identityToken', this.#identityToken)
+  }
+
+  get inAppChannel(): string | null {
+    return this.#inAppChannel;
   }
 
   private set inAppChannel(channel: string | null) {
@@ -154,7 +202,6 @@ class Client {
     this.accountAnonymousUid = getItem('accountAnonymousUid') || uuid()
     this.accountUid = getItem('accountUid') || null
     this.identityToken = getItem('identityToken') || null
-    this.inAppChannel = `dashx:account:${this.identityToken}`
   }
 
   identify(): Promise<Response>
@@ -181,6 +228,7 @@ class Client {
   setIdentity(uid: string, token: string): void {
     this.accountUid = uid
     this.identityToken = token
+    this.inAppChannel = `dashx:account:${token}`
   }
 
   setAnonymousIdentity(uid: string): void {
@@ -209,8 +257,13 @@ class Client {
     return this.makeHttpRequest(trackNotificationRequest, { input: { id, status, timestamp: timestamp || new Date() } })
   }
 
-  getInAppNotifications(): Promise<Response> {
-    return this.makeHttpRequest(inAppNotificationRecipientsListRequest, { filter: { channel: this.#inAppChannel }})
+  listInAppNotifications(): Promise<InAppNotificationRecipient[]> {
+    if (!this.inAppChannel) {
+      console.error('InApp notifications can be fetched only for identified users.')
+      return Promise.resolve([])
+    }
+
+    return this.makeHttpRequest(notificationRecipientsListRequest, { filter: { channel: this.#inAppChannel }})
   }
 
   addContent(urn: string, data: Record<string, any>): Promise<Response> {
@@ -439,4 +492,5 @@ class Client {
 }
 
 export default Client
-export type { ClientParams }
+export { WebsocketMessageType }
+export type { ClientParams, InAppNotificationRecipient, WebsocketMessage }
