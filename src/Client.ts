@@ -65,17 +65,23 @@ interface InvalidData {
 
 interface InAppNotificationData {
   body: string,
-  notification_id: string
+  notificationId: string
 }
 
 interface SubscribeData {
-  account_uid: string
+  accountUid: string
+}
+
+enum WebsocketMessageType {
+  SUBSCRIBE = 'SUBSCRIBE',
+  IN_APP_NOTIFICATION = 'IN_APP_NOTIFICATION',
+  INVALID = 'INVALID'
 }
 
 type WebsocketMessage =
-  | { type: 'SUBSCRIBE'; data: SubscribeData }
-  | { type: 'IN_APP_NOTIFICATION'; data: InAppNotificationData }
-  | { type: 'INVALID'; data: InvalidData }
+  | { type: WebsocketMessageType.SUBSCRIBE; data: SubscribeData }
+  | { type: WebsocketMessageType.IN_APP_NOTIFICATION; data: InAppNotificationData }
+  | { type: WebsocketMessageType.INVALID; data: InvalidData }
 
 type InAppNotification = {
   id: String
@@ -118,7 +124,7 @@ class Client {
   }
 
   get accountAnonymousUid(): string | null {
-    return this.#accountUid;
+    return this.#accountAnonymousUid;
   }
 
   private set accountAnonymousUid(uid: string) {
@@ -144,6 +150,10 @@ class Client {
     setItem('accountUid', this.#accountUid)
   }
 
+  get identityToken(): string | null {
+    return this.#identityToken;
+  }
+
   private set identityToken(token: string | null) {
     if (token == null) {
       this.#identityToken = token
@@ -152,6 +162,10 @@ class Client {
     }
 
     setItem('identityToken', this.#identityToken)
+  }
+
+  get inAppChannel(): string | null {
+    return this.#inAppChannel;
   }
 
   private set inAppChannel(channel: string | null) {
@@ -188,7 +202,6 @@ class Client {
     this.accountAnonymousUid = getItem('accountAnonymousUid') || uuid()
     this.accountUid = getItem('accountUid') || null
     this.identityToken = getItem('identityToken') || null
-    this.inAppChannel = `dashx:account:${this.identityToken}`
   }
 
   identify(): Promise<Response>
@@ -215,6 +228,7 @@ class Client {
   setIdentity(uid: string, token: string): void {
     this.accountUid = uid
     this.identityToken = token
+    this.inAppChannel = `dashx:account:${token}`
   }
 
   setAnonymousIdentity(uid: string): void {
@@ -244,8 +258,9 @@ class Client {
   }
 
   listInAppNotifications(): Promise<InAppNotificationRecipient[]> {
-    if (!this.#inAppChannel) {
-      throw new Error('InApp notifications can be fetched only for identified users.')
+    if (!this.inAppChannel) {
+      console.error('InApp notifications can be fetched only for identified users.')
+      return Promise.resolve([])
     }
 
     return this.makeHttpRequest(notificationRecipientsListRequest, { filter: { channel: this.#inAppChannel }})
@@ -477,4 +492,5 @@ class Client {
 }
 
 export default Client
+export { WebsocketMessageType }
 export type { ClientParams, InAppNotificationRecipient, WebsocketMessage }
