@@ -12,6 +12,7 @@ import {
   fetchContentRequest,
   fetchStoredPreferencesRequest,
   identifyAccountRequest,
+  notificationRecipientsAggregateRequest,
   notificationRecipientsListRequest,
   prepareAssetRequest,
   removeCouponFromCartRequest,
@@ -258,12 +259,24 @@ class Client {
   }
 
   listInAppNotifications(): Promise<InAppNotificationRecipient[]> {
-    if (!this.inAppChannel) {
-      console.error('InApp notifications can be fetched only for identified users.')
-      return Promise.resolve([])
-    }
+    return this.makeHttpRequest(notificationRecipientsListRequest, {
+      filter: {
+        contact: {
+          eq: this.#inAppChannel
+        }
+      }
+    })
+  }
 
-    return this.makeHttpRequest(notificationRecipientsListRequest, { filter: { channel: this.#inAppChannel }})
+  aggregateUnreadInAppNotifications(): Promise<number> {
+    return this.makeHttpRequest(notificationRecipientsAggregateRequest, {
+      filter: {
+        contact: {
+          eq: this.#inAppChannel,
+        },
+        readAt: null
+      }
+    })
   }
 
   addContent(urn: string, data: Record<string, any>): Promise<Response> {
