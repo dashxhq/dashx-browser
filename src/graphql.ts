@@ -30,6 +30,14 @@ export const notificationRecipientsListRequest = `
   }
 `
 
+export const notificationRecipientsAggregateRequest = `
+  query NotificationRecipientsAggregate($filter: JSON!) {
+    notificationRecipientsAggregate(filter: $filter) {
+        count
+    }
+  }
+`
+
 export const identifyAccountRequest = `
   mutation IdentifyAccount($input: IdentifyAccountInput!) {
     identifyAccount(input: $input) {
