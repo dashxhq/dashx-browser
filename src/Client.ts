@@ -59,16 +59,32 @@ type TrackNotificationInputType = {
   timestamp?: Date
 }
 
-type InAppNotificationMessageType = {
-  body: String
+interface InvalidData {
+  message: string
 }
+
+interface InAppNotificationData {
+  body: string,
+  notification_id: string
+}
+
+interface SubscribeData {
+  account_uid: string
+}
+
+type WebsocketMessage =
+  | { type: 'SUBSCRIBE'; data: SubscribeData }
+  | { type: 'IN_APP_NOTIFICATION'; data: InAppNotificationData }
+  | { type: 'INVALID'; data: InvalidData }
 
 type InAppNotification = {
   id: String
-  renderedContent: InAppNotificationMessageType
+  renderedContent: {
+    body: String
+  }
 }
 
-export type InAppNotificationRecipient = {
+type InAppNotificationRecipient = {
   id: String,
   notificationId: String,
   contact: String,
@@ -461,4 +477,4 @@ class Client {
 }
 
 export default Client
-export type { ClientParams }
+export type { ClientParams, InAppNotificationRecipient, WebsocketMessage }
