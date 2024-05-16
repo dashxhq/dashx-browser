@@ -14,7 +14,7 @@ export const trackNotificationRequest = `
   }
 `
 
-export const inAppNotificationRecipientsListRequest = `
+export const notificationRecipientsListRequest = `
   query NotificationRecipientsList($filter: JSON!) {
     notificationRecipientsList(filter: $filter) {
         id

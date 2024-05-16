@@ -12,7 +12,7 @@ import {
   fetchContentRequest,
   fetchStoredPreferencesRequest,
   identifyAccountRequest,
-  inAppNotificationRecipientsListRequest,
+  notificationRecipientsListRequest,
   prepareAssetRequest,
   removeCouponFromCartRequest,
   saveContactsRequest,
@@ -29,6 +29,9 @@ import { parseFilterObject } from './utils'
 import type { ContentOptions, FetchContentOptions } from './ContentOptionsBuilder'
 import type { Context } from './context'
 
+const UPLOAD_RETRY_LIMIT = 5
+const UPLOAD_RETRY_TIMEOUT = 3000
+
 type ClientParams = {
   publicKey: string,
   baseUri?: string,
@@ -43,8 +46,6 @@ type ContactStubInputType = {
   tag: string
 }
 
-const UPLOAD_RETRY_LIMIT = 5
-const UPLOAD_RETRY_TIMEOUT = 3000
 
 type UploadInputType = {
   file: File,
@@ -56,6 +57,23 @@ type TrackNotificationInputType = {
   id: string,
   status: 'DELIVERED' | 'DISMISSED' | 'OPENED' | 'CLICKED',
   timestamp?: Date
+}
+
+type InAppNotificationMessageType = {
+  body: String
+}
+
+type InAppNotification = {
+  id: String
+  renderedContent: InAppNotificationMessageType
+}
+
+export type InAppNotificationRecipient = {
+  id: String,
+  notificationId: String,
+  contact: String,
+  readAt: String
+  notification: InAppNotification
 }
 
 class Client {
@@ -209,8 +227,12 @@ class Client {
     return this.makeHttpRequest(trackNotificationRequest, { input: { id, status, timestamp: timestamp || new Date() } })
   }
 
-  getInAppNotifications(): Promise<Response> {
-    return this.makeHttpRequest(inAppNotificationRecipientsListRequest, { filter: { channel: this.#inAppChannel }})
+  listInAppNotifications(): Promise<InAppNotificationRecipient[]> {
+    if (!this.#inAppChannel) {
+      throw new Error('InApp notifications can be fetched only for identified users.')
+    }
+
+    return this.makeHttpRequest(notificationRecipientsListRequest, { filter: { channel: this.#inAppChannel }})
   }
 
   addContent(urn: string, data: Record<string, any>): Promise<Response> {
