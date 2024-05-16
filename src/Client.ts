@@ -172,7 +172,7 @@ class Client {
     if (channel == null) {
       this.#inAppChannel = channel
     } else {
-      this.#identityToken = String(channel)
+      this.#inAppChannel = String(channel)
     }
   }
 
