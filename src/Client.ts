@@ -10,10 +10,10 @@ import {
   fetchCartRequest,
   fetchContactsRequest,
   fetchContentRequest,
+  fetchInAppNotifications,
   fetchStoredPreferencesRequest,
   identifyAccountRequest,
   notificationRecipientsAggregateRequest,
-  notificationRecipientsListRequest,
   prepareAssetRequest,
   removeCouponFromCartRequest,
   saveContactsRequest,
@@ -21,7 +21,7 @@ import {
   searchContentRequest,
   trackEventRequest,
   trackNotificationRequest,
-  transferCartRequest
+  transferCartRequest,
 } from './graphql'
 import ContentOptionsBuilder from './ContentOptionsBuilder'
 import generateContext from './context'
@@ -60,8 +60,8 @@ type TrackNotificationInputType = {
   timestamp?: Date
 }
 
-interface InvalidData {
-  message: string
+interface SubscriptionSuccededData {
+  channel: string
 }
 
 interface InAppNotificationData {
@@ -75,28 +75,23 @@ interface SubscribeData {
 
 enum WebsocketMessageType {
   SUBSCRIBE = 'SUBSCRIBE',
+  SUBSCRIPTION_SUCCEDED = 'SUBSCRIPTION_SUCCEDED',
   IN_APP_NOTIFICATION = 'IN_APP_NOTIFICATION',
-  INVALID = 'INVALID'
 }
 
 type WebsocketMessage =
   | { type: WebsocketMessageType.SUBSCRIBE; data: SubscribeData }
+  | { type: WebsocketMessageType.SUBSCRIPTION_SUCCEDED; data: SubscriptionSuccededData }
   | { type: WebsocketMessageType.IN_APP_NOTIFICATION; data: InAppNotificationData }
-  | { type: WebsocketMessageType.INVALID; data: InvalidData }
+
 
 type InAppNotification = {
-  id: String
+  id: string
+  sentAt: Date,
+  readAt?: Date,
   renderedContent: {
-    body: String
+    body: string
   }
-}
-
-type InAppNotificationRecipient = {
-  id: String,
-  notificationId: String,
-  contact: String,
-  readAt: String
-  notification: InAppNotification
 }
 
 class Client {
@@ -169,11 +164,13 @@ class Client {
     return this.#inAppChannel;
   }
 
-  private set inAppChannel(channel: string | null) {
+  set inAppChannel(channel: string | null) {
     if (channel == null) {
       this.#inAppChannel = channel
     } else {
       this.#inAppChannel = String(channel)
+
+      setItem('inAppChannel', this.#inAppChannel)
     }
   }
 
@@ -229,7 +226,10 @@ class Client {
   setIdentity(uid: string, token: string): void {
     this.accountUid = uid
     this.identityToken = token
-    this.inAppChannel = `dashx:account:${token}`
+  }
+
+  setInAppChannel(channelName: string) {
+    this.inAppChannel = channelName
   }
 
   setAnonymousIdentity(uid: string): void {
@@ -258,12 +258,10 @@ class Client {
     return this.makeHttpRequest(trackNotificationRequest, { input: { id, status, timestamp: timestamp || new Date() } })
   }
 
-  listInAppNotifications(): Promise<InAppNotificationRecipient[]> {
-    return this.makeHttpRequest(notificationRecipientsListRequest, {
+  async fetchInAppNotifications(): Promise<InAppNotification[]> {
+    return this.makeHttpRequest(fetchInAppNotifications, {
       filter: {
-        contact: {
-          eq: this.#inAppChannel
-        }
+        channel: this.#inAppChannel
       }
     })
   }
@@ -506,4 +504,4 @@ class Client {
 
 export default Client
 export { WebsocketMessageType }
-export type { ClientParams, InAppNotificationRecipient, WebsocketMessage }
+export type { ClientParams, InAppNotification, WebsocketMessage }
