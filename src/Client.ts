@@ -101,8 +101,6 @@ class Client {
 
   #identityToken: string | null = null
 
-  #inAppChannel: string | null = null
-
   targetEnvironment?: string
 
   context: Context
@@ -160,20 +158,6 @@ class Client {
     setItem('identityToken', this.#identityToken)
   }
 
-  get inAppChannel(): string | null {
-    return this.#inAppChannel;
-  }
-
-  set inAppChannel(channel: string | null) {
-    if (channel == null) {
-      this.#inAppChannel = channel
-    } else {
-      this.#inAppChannel = String(channel)
-
-      setItem('inAppChannel', this.#inAppChannel)
-    }
-  }
-
   private async makeHttpRequest(request: string, params: any): Promise<any> {
     const response = await fetch(this.baseUri, {
       method: 'POST',
@@ -228,10 +212,6 @@ class Client {
     this.identityToken = token
   }
 
-  setInAppChannel(channelName: string) {
-    this.inAppChannel = channelName
-  }
-
   setAnonymousIdentity(uid: string): void {
     this.accountAnonymousUid = uid
   }
@@ -240,7 +220,6 @@ class Client {
     this.accountAnonymousUid = uuid()
     this.accountUid = null
     this.identityToken = null
-    this.#inAppChannel = null
   }
 
   track(event: string, data?: Record<string, any>): Promise<Response> {
@@ -258,19 +237,19 @@ class Client {
     return this.makeHttpRequest(trackNotificationRequest, { input: { id, status, timestamp: timestamp || new Date() } })
   }
 
-  async fetchInAppNotifications(): Promise<InAppNotification[]> {
+  async fetchInAppNotifications(channel: string): Promise<InAppNotification[]> {
     return this.makeHttpRequest(fetchInAppNotifications, {
       filter: {
-        channel: this.#inAppChannel
+        channel
       }
     })
   }
 
-  aggregateUnreadInAppNotifications(): Promise<number> {
+  aggregateUnreadInAppNotifications(channel: string): Promise<number> {
     return this.makeHttpRequest(notificationRecipientsAggregateRequest, {
       filter: {
         contact: {
-          eq: this.#inAppChannel,
+          eq: channel,
         },
         readAt: null
       }

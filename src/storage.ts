@@ -1,8 +1,7 @@
 type PersistedData = {
   accountAnonymousUid: string,
   accountUid: string | null,
-  identityToken: string | null,
-  inAppChannel: string | null
+  identityToken: string | null
 }
 
 const LOCAL_STORAGE_KEY = 'dashx-sdk'
