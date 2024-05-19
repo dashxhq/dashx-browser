@@ -13,7 +13,7 @@ import {
   fetchInAppNotifications,
   fetchStoredPreferencesRequest,
   identifyAccountRequest,
-  notificationRecipientsAggregateRequest,
+  inAppNotificationsAggregateRequest,
   prepareAssetRequest,
   removeCouponFromCartRequest,
   saveContactsRequest,
@@ -56,11 +56,11 @@ type UploadInputType = {
 
 type TrackNotificationInputType = {
   id: string,
-  status: 'DELIVERED' | 'DISMISSED' | 'OPENED' | 'CLICKED',
+  status: 'DELIVERED' | 'DISMISSED' | 'OPENED' | 'CLICKED' | 'READ' | 'UNREAD',
   timestamp?: Date
 }
 
-interface SubscriptionSuccededData {
+interface SubscriptionSucceededData {
   channel: string
 }
 
@@ -75,22 +75,32 @@ interface SubscribeData {
 
 enum WebsocketMessageType {
   SUBSCRIBE = 'SUBSCRIBE',
-  SUBSCRIPTION_SUCCEDED = 'SUBSCRIPTION_SUCCEDED',
+  SUBSCRIPTION_SUCCEEDED = 'SUBSCRIPTION_SUCCEEDED',
   IN_APP_NOTIFICATION = 'IN_APP_NOTIFICATION',
 }
 
 type WebsocketMessage =
   | { type: WebsocketMessageType.SUBSCRIBE; data: SubscribeData }
-  | { type: WebsocketMessageType.SUBSCRIPTION_SUCCEDED; data: SubscriptionSuccededData }
+  | { type: WebsocketMessageType.SUBSCRIPTION_SUCCEEDED; data: SubscriptionSucceededData }
   | { type: WebsocketMessageType.IN_APP_NOTIFICATION; data: InAppNotificationData }
 
 
 type InAppNotification = {
   id: string
-  sentAt: Date,
-  readAt?: Date,
+  sentAt: string,
+  readAt?: string,
   renderedContent: {
     body: string
+  }
+}
+
+type FetchInAppNotificationsResponse = {
+  notifications: InAppNotification[]
+}
+
+type InAppNotificationsAggregateResponse = {
+  notificationsAggregate: {
+    count: number
   }
 }
 
@@ -237,23 +247,20 @@ class Client {
     return this.makeHttpRequest(trackNotificationRequest, { input: { id, status, timestamp: timestamp || new Date() } })
   }
 
-  async fetchInAppNotifications(channel: string): Promise<InAppNotification[]> {
-    return this.makeHttpRequest(fetchInAppNotifications, {
-      filter: {
-        channel
-      }
-    })
+  async fetchInAppNotifications(channel: string): Promise<FetchInAppNotificationsResponse> {
+    const params = {
+      channel
+    }
+
+    return this.makeHttpRequest(fetchInAppNotifications, { input: params })
   }
 
-  aggregateUnreadInAppNotifications(channel: string): Promise<number> {
-    return this.makeHttpRequest(notificationRecipientsAggregateRequest, {
-      filter: {
-        contact: {
-          eq: channel,
-        },
-        readAt: null
-      }
-    })
+  inAppNotificationsAggregate(channel: string): Promise<InAppNotificationsAggregateResponse> {
+    const params = {
+      channel
+    }
+
+    return this.makeHttpRequest(inAppNotificationsAggregateRequest, { input: params })
   }
 
   addContent(urn: string, data: Record<string, any>): Promise<Response> {

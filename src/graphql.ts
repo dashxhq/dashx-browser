@@ -16,7 +16,7 @@ export const trackNotificationRequest = `
 
 export const fetchInAppNotifications = `
   query FetchInAppNotifications($input: FetchInAppNotificationsInput!) {
-    fetchInAppNotifications(input: $input) {
+    notifications: fetchInAppNotifications(input: $input) {
       id
       sentAt
       readAt
@@ -25,9 +25,9 @@ export const fetchInAppNotifications = `
   }
 `
 
-export const notificationRecipientsAggregateRequest = `
-  query NotificationRecipientsAggregate($filter: JSON!) {
-    notificationRecipientsAggregate(filter: $filter) {
+export const inAppNotificationsAggregateRequest = `
+  query InAppNotificationsAggregate($input: InAppNotificationsAggregateInput!) {
+    notificationsAggregate: inAppNotificationsAggregate(input: $input) {
       count
     }
   }
