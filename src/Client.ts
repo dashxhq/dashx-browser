@@ -11,9 +11,9 @@ import {
   fetchContactsRequest,
   fetchContentRequest,
   fetchInAppNotifications,
+  fetchInAppNotificationsAggregateRequest,
   fetchStoredPreferencesRequest,
   identifyAccountRequest,
-  inAppNotificationsAggregateRequest,
   prepareAssetRequest,
   removeCouponFromCartRequest,
   saveContactsRequest,
@@ -98,7 +98,7 @@ type FetchInAppNotificationsResponse = {
   notifications: InAppNotification[]
 }
 
-type InAppNotificationsAggregateResponse = {
+type FetchInAppNotificationsAggregateResponse = {
   notificationsAggregate: {
     count: number
   }
@@ -255,12 +255,15 @@ class Client {
     return this.makeHttpRequest(fetchInAppNotifications, { input: params })
   }
 
-  inAppNotificationsAggregate(): Promise<InAppNotificationsAggregateResponse> {
+  fetchUnreadInAppNotificationsCount(): Promise<FetchInAppNotificationsAggregateResponse> {
     const params = {
-      accountUid: this.#accountUid
+      accountUid: this.#accountUid,
+      filter: {
+        readAt: "null"
+      }
     }
 
-    return this.makeHttpRequest(inAppNotificationsAggregateRequest, { input: params })
+    return this.makeHttpRequest(fetchInAppNotificationsAggregateRequest, { input: params })
   }
 
   addContent(urn: string, data: Record<string, any>): Promise<Response> {

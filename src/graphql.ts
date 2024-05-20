@@ -25,9 +25,9 @@ export const fetchInAppNotifications = `
   }
 `
 
-export const inAppNotificationsAggregateRequest = `
-  query InAppNotificationsAggregate($input: InAppNotificationsAggregateInput!) {
-    notificationsAggregate: inAppNotificationsAggregate(input: $input) {
+export const fetchInAppNotificationsAggregateRequest = `
+  query FetchInAppNotificationsAggregate($input: FetchInAppNotificationsAggregateInput!) {
+    notificationsAggregate: fetchInAppNotificationsAggregate(input: $input) {
       count
     }
   }
