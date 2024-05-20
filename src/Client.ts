@@ -247,17 +247,17 @@ class Client {
     return this.makeHttpRequest(trackNotificationRequest, { input: { id, status, timestamp: timestamp || new Date() } })
   }
 
-  async fetchInAppNotifications(channel: string): Promise<FetchInAppNotificationsResponse> {
+  async fetchInAppNotifications(): Promise<FetchInAppNotificationsResponse> {
     const params = {
-      channel
+      accountUid: this.#accountUid
     }
 
     return this.makeHttpRequest(fetchInAppNotifications, { input: params })
   }
 
-  inAppNotificationsAggregate(channel: string): Promise<InAppNotificationsAggregateResponse> {
+  inAppNotificationsAggregate(): Promise<InAppNotificationsAggregateResponse> {
     const params = {
-      channel
+      accountUid: this.#accountUid
     }
 
     return this.makeHttpRequest(inAppNotificationsAggregateRequest, { input: params })
