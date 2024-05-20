@@ -1,7 +1,7 @@
 export const trackEventRequest = `
   mutation TrackEvent($input: TrackEventInput!) {
     trackEvent(input: $input) {
-        success
+      success
     }
   }
 `
@@ -9,31 +9,26 @@ export const trackEventRequest = `
 export const trackNotificationRequest = `
   mutation TrackNotification($input: TrackNotificationInput!) {
     trackNotification(input: $input) {
-        success
+      success
     }
   }
 `
 
-export const notificationRecipientsListRequest = `
-  query NotificationRecipientsList($filter: JSON!) {
-    notificationRecipientsList(filter: $filter) {
-        id
-        notificationId
-        contact
-        readAt
-
-        notification {
-            id
-            renderedContent
-        }
+export const fetchInAppNotifications = `
+  query FetchInAppNotifications($input: FetchInAppNotificationsInput!) {
+    notifications: fetchInAppNotifications(input: $input) {
+      id
+      sentAt
+      readAt
+      renderedContent
     }
   }
 `
 
-export const notificationRecipientsAggregateRequest = `
-  query NotificationRecipientsAggregate($filter: JSON!) {
-    notificationRecipientsAggregate(filter: $filter) {
-        count
+export const inAppNotificationsAggregateRequest = `
+  query InAppNotificationsAggregate($input: InAppNotificationsAggregateInput!) {
+    notificationsAggregate: inAppNotificationsAggregate(input: $input) {
+      count
     }
   }
 `
@@ -41,7 +36,7 @@ export const notificationRecipientsAggregateRequest = `
 export const identifyAccountRequest = `
   mutation IdentifyAccount($input: IdentifyAccountInput!) {
     identifyAccount(input: $input) {
-        id
+      id
     }
   }
 `
@@ -49,12 +44,12 @@ export const identifyAccountRequest = `
 export const addContentRequest = `
   mutation AddContent($input: AddContentInput!) {
     addContent(input: $input) {
-        id
-        identifier
-        position
-        data
-        createdAt
-        updatedAt
+      id
+      identifier
+      position
+      data
+      createdAt
+      updatedAt
     }
   }
 `
@@ -62,12 +57,12 @@ export const addContentRequest = `
 export const editContentRequest = `
   mutation EditContent($input: EditContentInput!) {
     editContent(input: $input) {
-        id
-        identifier
-        position
-        data
-        createdAt
-        updatedAt
+      id
+      identifier
+      position
+      data
+      createdAt
+      updatedAt
     }
   }
 `
@@ -118,30 +113,30 @@ const cart = `
   currencyCode
 
   orderItems {
-      id
-      quantity
-      unitPrice
-      subtotal
-      discount
-      tax
-      total
-      custom
-      currencyCode
+    id
+    quantity
+    unitPrice
+    subtotal
+    discount
+    tax
+    total
+    custom
+    currencyCode
 
-      item {
-        ${item}
-      }
+    item {
+      ${item}
+    }
   }
 
   couponRedemptions {
-      coupon {
-          name
-          identifier
-          discountType
-          discountAmount
-          currencyCode
-          expiresAt
-      }
+    coupon {
+      name
+      identifier
+      discountType
+      discountAmount
+      currencyCode
+      expiresAt
+    }
   }
 `
 export const addItemToCartRequest = `
