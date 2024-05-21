@@ -10,7 +10,7 @@ export type ContentOptions = {
   filter?: Record<string, any>,
   order?: Record<string, 'ASC' | 'DESC'>,
   limit?: number,
-  page?: number
+  page?: number,
 }
 
 export type FetchContentOptions = Pick<ContentOptions, 'exclude' | 'include' | 'fields' | 'language' | 'preview'>
@@ -21,7 +21,7 @@ class ContentOptionsBuilder {
   private callback: (options: ContentOptions) => Promise<any>
 
   constructor(
-    callback: (options: ContentOptions) => Promise<any>
+    callback: (options: ContentOptions) => Promise<any>,
   ) {
     this.options = {}
     this.callback = callback

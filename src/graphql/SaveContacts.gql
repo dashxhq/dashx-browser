@@ -1,0 +1,7 @@
+mutation SaveContacts($input: SaveContactsInput!) {
+  saveContacts(input: $input) {
+    contacts {
+      ...ContactFragment
+    }
+  }
+}

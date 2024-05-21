@@ -1,0 +1,5 @@
+mutation prepareAsset($input: PrepareAssetInput!) {
+  prepareAsset(input: $input) {
+    ...AssetFragment
+  }
+}

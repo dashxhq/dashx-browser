@@ -1,0 +1,5 @@
+mutation AddItemToCart($input: AddItemToCartInput!) {
+  addItemToCart(input:$input) {
+    ...CartFragment
+  }
+}

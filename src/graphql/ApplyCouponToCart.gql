@@ -1,0 +1,5 @@
+mutation ApplyCouponToCart($input: ApplyCouponToCartInput!) {
+  applyCouponToCart(input:$input) {
+    ...CartFragment
+  }
+}

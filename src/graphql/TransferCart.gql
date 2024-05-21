@@ -1,0 +1,5 @@
+mutation TransferCart($input: TransferCartInput!) {
+  transferCart(input: $input) {
+    ...CartFragment
+  }
+}

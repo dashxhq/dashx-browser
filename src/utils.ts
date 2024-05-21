@@ -11,7 +11,7 @@ export function parseFilterObject(filterObject: Record<string, any> = {}) {
 
     filterBy.data = {
       [key]: filterObject[key],
-      ...filterBy.data
+      ...filterBy.data,
     }
   })
 

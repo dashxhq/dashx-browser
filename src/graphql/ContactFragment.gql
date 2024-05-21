@@ -1,0 +1,13 @@
+fragment ContactFragment on Contact {
+  id
+  accountId
+  name
+  kind
+  value
+  unverifiedValue
+  verifiedAt
+  status
+  tag
+  createdAt
+  updatedAt
+}
