@@ -6,7 +6,7 @@ module.exports = {
     'airbnb-base',
     'airbnb-typescript/base',
   ],
-  ignorePatterns: [ 'dist' ],
+  ignorePatterns: [ 'dist', '.eslintrc.js', 'codegen.ts', 'vite.config.mts' ],
   parserOptions: {
     ecmaVersion: 'latest',
     sourceType: 'module',

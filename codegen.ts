@@ -18,8 +18,10 @@ const config: CodegenConfig = {
         'typescript-urql',
       ],
       config: {
+        enumsAsTypes: true,
         omitObjectTypes: true,
         withHooks: false,
+        skipTypename: true
       },
     },
   },

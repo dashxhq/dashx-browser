@@ -48,36 +48,32 @@ export type ApplyCouponToCartInput = {
   targetEnvironment?: InputMaybe<Scalars['String']['input']>,
 }
 
-export enum AssetProcessingStatus {
-  Completed = 'COMPLETED',
-  Failed = 'FAILED',
-  Pending = 'PENDING',
-}
+export type AssetProcessingStatus =
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'PENDING'
 
-export enum AssetUploadStatus {
-  Canceled = 'CANCELED',
-  Failed = 'FAILED',
-  Pending = 'PENDING',
-  TimedOut = 'TIMED_OUT',
-  Uploaded = 'UPLOADED',
-}
+export type AssetUploadStatus =
+  | 'CANCELED'
+  | 'FAILED'
+  | 'PENDING'
+  | 'TIMED_OUT'
+  | 'UPLOADED'
 
-export enum ContactKind {
-  Android = 'ANDROID',
-  Email = 'EMAIL',
-  Ios = 'IOS',
-  Phone = 'PHONE',
-  Web = 'WEB',
-  Whatsapp = 'WHATSAPP',
-}
+export type ContactKind =
+  | 'ANDROID'
+  | 'EMAIL'
+  | 'IOS'
+  | 'PHONE'
+  | 'WEB'
+  | 'WHATSAPP'
 
-export enum ContactStatus {
-  Blacklisted = 'BLACKLISTED',
-  NotSubscribed = 'NOT_SUBSCRIBED',
-  Revoked = 'REVOKED',
-  Subscribed = 'SUBSCRIBED',
-  Unsubscribed = 'UNSUBSCRIBED',
-}
+export type ContactStatus =
+  | 'BLACKLISTED'
+  | 'NOT_SUBSCRIBED'
+  | 'REVOKED'
+  | 'SUBSCRIBED'
+  | 'UNSUBSCRIBED'
 
 export type ContactStubInput = {
   kind: ContactKind,
@@ -87,10 +83,9 @@ export type ContactStubInput = {
   value: Scalars['String']['input'],
 }
 
-export enum CouponDiscountType {
-  Fixed = 'FIXED',
-  Percentage = 'PERCENTAGE',
-}
+export type CouponDiscountType =
+  | 'FIXED'
+  | 'PERCENTAGE'
 
 export type EditContentInput = {
   content: Scalars['String']['input'],
@@ -149,13 +144,12 @@ export type IdentifyAccountInput = {
   uid?: InputMaybe<Scalars['String']['input']>,
 }
 
-export enum OrderStatus {
-  Canceled = 'CANCELED',
-  CheckedOut = 'CHECKED_OUT',
-  Draft = 'DRAFT',
-  Initial = 'INITIAL',
-  Paid = 'PAID',
-}
+export type OrderStatus =
+  | 'CANCELED'
+  | 'CHECKED_OUT'
+  | 'DRAFT'
+  | 'INITIAL'
+  | 'PAID'
 
 export type PrepareAssetInput = {
   attribute?: InputMaybe<Scalars['String']['input']>,
@@ -166,17 +160,15 @@ export type PrepareAssetInput = {
   targetEnvironment?: InputMaybe<Scalars['String']['input']>,
 }
 
-export enum PricingKind {
-  InApp = 'IN_APP',
-  Regular = 'REGULAR',
-}
+export type PricingKind =
+  | 'IN_APP'
+  | 'REGULAR'
 
-export enum PricingRecurringIntervalUnit {
-  Day = 'DAY',
-  Month = 'MONTH',
-  Week = 'WEEK',
-  Year = 'YEAR',
-}
+export type PricingRecurringIntervalUnit =
+  | 'DAY'
+  | 'MONTH'
+  | 'WEEK'
+  | 'YEAR'
 
 export type RemoveCouponFromCartInput = {
   accountAnonymousUid?: InputMaybe<Scalars['String']['input']>,
@@ -297,14 +289,13 @@ export type TrackNotificationInput = {
   timestamp: Scalars['Timestamp']['input'],
 }
 
-export enum TrackNotificationStatus {
-  Clicked = 'CLICKED',
-  Delivered = 'DELIVERED',
-  Dismissed = 'DISMISSED',
-  Opened = 'OPENED',
-  Read = 'READ',
-  Unread = 'UNREAD',
-}
+export type TrackNotificationStatus =
+  | 'CLICKED'
+  | 'DELIVERED'
+  | 'DISMISSED'
+  | 'OPENED'
+  | 'READ'
+  | 'UNREAD'
 
 export type TransferCartInput = {
   accountAnonymousUid: Scalars['String']['input'],
@@ -317,131 +308,131 @@ export type AddContentMutationVariables = Exact<{
   input: AddContentInput,
 }>
 
-export type AddContentMutation = { __typename?: 'Mutation', addContent: { __typename?: 'CustomContent', id: any, identifier: string, position: number, data: any, createdAt: any, updatedAt: any } }
+export type AddContentMutation = { addContent: { id: any, identifier: string, position: number, data: any, createdAt: any, updatedAt: any } }
 
 export type AddItemToCartMutationVariables = Exact<{
   input: AddItemToCartInput,
 }>
 
-export type AddItemToCartMutation = { __typename?: 'Mutation', addItemToCart: { __typename?: 'Order', id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ __typename?: 'OrderItem', id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { __typename?: 'Item', id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ __typename?: 'Pricing', id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ __typename?: 'CouponRedemption', coupon: { __typename?: 'Coupon', name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> } }
+export type AddItemToCartMutation = { addItemToCart: { id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ coupon: { name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> } }
 
 export type ApplyCouponToCartMutationVariables = Exact<{
   input: ApplyCouponToCartInput,
 }>
 
-export type ApplyCouponToCartMutation = { __typename?: 'Mutation', applyCouponToCart: { __typename?: 'Order', id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ __typename?: 'OrderItem', id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { __typename?: 'Item', id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ __typename?: 'Pricing', id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ __typename?: 'CouponRedemption', coupon: { __typename?: 'Coupon', name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> } }
+export type ApplyCouponToCartMutation = { applyCouponToCart: { id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ coupon: { name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> } }
 
 export type AssetQueryVariables = Exact<{
   id: Scalars['UUID']['input'],
 }>
 
-export type AssetQuery = { __typename?: 'Query', asset: { __typename?: 'Asset', attributeId?: any | null, createdAt: any, data: any, id: any, mimeType?: string | null, name?: string | null, processingStatus: AssetProcessingStatus, resourceId?: any | null, size?: number | null, storageProviderId?: any | null, updatedAt: any, uploadStatus: AssetUploadStatus, uploaderId?: any | null, url?: string | null, workspaceId: any } }
+export type AssetQuery = { asset: { attributeId?: any | null, createdAt: any, data: any, id: any, mimeType?: string | null, name?: string | null, processingStatus: AssetProcessingStatus, resourceId?: any | null, size?: number | null, storageProviderId?: any | null, updatedAt: any, uploadStatus: AssetUploadStatus, uploaderId?: any | null, url?: string | null, workspaceId: any } }
 
-export type AssetFragmentFragment = { __typename?: 'Asset', attributeId?: any | null, createdAt: any, data: any, id: any, mimeType?: string | null, name?: string | null, processingStatus: AssetProcessingStatus, resourceId?: any | null, size?: number | null, storageProviderId?: any | null, updatedAt: any, uploadStatus: AssetUploadStatus, uploaderId?: any | null, url?: string | null, workspaceId: any }
+export type AssetFragmentFragment = { attributeId?: any | null, createdAt: any, data: any, id: any, mimeType?: string | null, name?: string | null, processingStatus: AssetProcessingStatus, resourceId?: any | null, size?: number | null, storageProviderId?: any | null, updatedAt: any, uploadStatus: AssetUploadStatus, uploaderId?: any | null, url?: string | null, workspaceId: any }
 
-export type CartFragmentFragment = { __typename?: 'Order', id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ __typename?: 'OrderItem', id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { __typename?: 'Item', id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ __typename?: 'Pricing', id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ __typename?: 'CouponRedemption', coupon: { __typename?: 'Coupon', name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> }
+export type CartFragmentFragment = { id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ coupon: { name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> }
 
-export type ContactFragmentFragment = { __typename?: 'Contact', id: any, accountId: any, name?: string | null, kind: ContactKind, value: string, unverifiedValue?: string | null, verifiedAt?: any | null, status: ContactStatus, tag?: string | null, createdAt: any, updatedAt: any }
+export type ContactFragmentFragment = { id: any, accountId: any, name?: string | null, kind: ContactKind, value: string, unverifiedValue?: string | null, verifiedAt?: any | null, status: ContactStatus, tag?: string | null, createdAt: any, updatedAt: any }
 
-export type ContentFragmentFragment = { __typename?: 'CustomContent', id: any, identifier: string, position: number, data: any, createdAt: any, updatedAt: any }
+export type ContentFragmentFragment = { id: any, identifier: string, position: number, data: any, createdAt: any, updatedAt: any }
 
 export type EditContentMutationVariables = Exact<{
   input: EditContentInput,
 }>
 
-export type EditContentMutation = { __typename?: 'Mutation', editContent: { __typename?: 'CustomContent', id: any, identifier: string, position: number, data: any, createdAt: any, updatedAt: any } }
+export type EditContentMutation = { editContent: { id: any, identifier: string, position: number, data: any, createdAt: any, updatedAt: any } }
 
 export type FetchCartQueryVariables = Exact<{
   input: FetchCartInput,
 }>
 
-export type FetchCartQuery = { __typename?: 'Query', fetchCart: { __typename?: 'Order', id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ __typename?: 'OrderItem', id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { __typename?: 'Item', id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ __typename?: 'Pricing', id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ __typename?: 'CouponRedemption', coupon: { __typename?: 'Coupon', name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> } }
+export type FetchCartQuery = { fetchCart: { id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ coupon: { name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> } }
 
 export type FetchContactsQueryVariables = Exact<{
   input: FetchContactsInput,
 }>
 
-export type FetchContactsQuery = { __typename?: 'Query', fetchContacts: { __typename?: 'FetchContactsResponse', contacts: Array<{ __typename?: 'Contact', id: any, accountId: any, name?: string | null, kind: ContactKind, value: string, unverifiedValue?: string | null, verifiedAt?: any | null, status: ContactStatus, tag?: string | null, createdAt: any, updatedAt: any }> } }
+export type FetchContactsQuery = { fetchContacts: { contacts: Array<{ id: any, accountId: any, name?: string | null, kind: ContactKind, value: string, unverifiedValue?: string | null, verifiedAt?: any | null, status: ContactStatus, tag?: string | null, createdAt: any, updatedAt: any }> } }
 
 export type FetchContentQueryVariables = Exact<{
   input: FetchContentInput,
 }>
 
-export type FetchContentQuery = { __typename?: 'Query', fetchContent: any }
+export type FetchContentQuery = { fetchContent: any }
 
 export type FetchInAppNotificationsQueryVariables = Exact<{
   input: FetchInAppNotificationsInput,
 }>
 
-export type FetchInAppNotificationsQuery = { __typename?: 'Query', notifications: Array<{ __typename?: 'Notification', id: any, sentAt?: any | null, readAt?: any | null, renderedContent: any }> }
+export type FetchInAppNotificationsQuery = { notifications: Array<{ id: any, sentAt?: any | null, readAt?: any | null, renderedContent: any }> }
 
 export type FetchInAppNotificationsAggregateQueryVariables = Exact<{
   input: FetchInAppNotificationsAggregateInput,
 }>
 
-export type FetchInAppNotificationsAggregateQuery = { __typename?: 'Query', notificationsAggregate: { __typename?: 'FetchInAppNotificationsAggregateResponse', count?: number | null } }
+export type FetchInAppNotificationsAggregateQuery = { notificationsAggregate: { count?: number | null } }
 
 export type FetchStoredPreferencesQueryVariables = Exact<{
   input: FetchStoredPreferencesInput,
 }>
 
-export type FetchStoredPreferencesQuery = { __typename?: 'Query', fetchStoredPreferences: { __typename?: 'FetchStoredPreferencesResponse', preferenceData: any } }
+export type FetchStoredPreferencesQuery = { fetchStoredPreferences: { preferenceData: any } }
 
 export type IdentifyAccountMutationVariables = Exact<{
   input: IdentifyAccountInput,
 }>
 
-export type IdentifyAccountMutation = { __typename?: 'Mutation', identifyAccount: { __typename?: 'Account', id: any } }
+export type IdentifyAccountMutation = { identifyAccount: { id: any } }
 
-export type ItemFragmentFragment = { __typename?: 'Item', id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ __typename?: 'Pricing', id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> }
+export type ItemFragmentFragment = { id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> }
 
 export type PrepareAssetMutationVariables = Exact<{
   input: PrepareAssetInput,
 }>
 
-export type PrepareAssetMutation = { __typename?: 'Mutation', prepareAsset: { __typename?: 'Asset', attributeId?: any | null, createdAt: any, data: any, id: any, mimeType?: string | null, name?: string | null, processingStatus: AssetProcessingStatus, resourceId?: any | null, size?: number | null, storageProviderId?: any | null, updatedAt: any, uploadStatus: AssetUploadStatus, uploaderId?: any | null, url?: string | null, workspaceId: any } }
+export type PrepareAssetMutation = { prepareAsset: { attributeId?: any | null, createdAt: any, data: any, id: any, mimeType?: string | null, name?: string | null, processingStatus: AssetProcessingStatus, resourceId?: any | null, size?: number | null, storageProviderId?: any | null, updatedAt: any, uploadStatus: AssetUploadStatus, uploaderId?: any | null, url?: string | null, workspaceId: any } }
 
 export type RemoveCouponFromCartMutationVariables = Exact<{
   input: RemoveCouponFromCartInput,
 }>
 
-export type RemoveCouponFromCartMutation = { __typename?: 'Mutation', removeCouponFromCart: { __typename?: 'Order', id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ __typename?: 'OrderItem', id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { __typename?: 'Item', id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ __typename?: 'Pricing', id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ __typename?: 'CouponRedemption', coupon: { __typename?: 'Coupon', name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> } }
+export type RemoveCouponFromCartMutation = { removeCouponFromCart: { id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ coupon: { name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> } }
 
 export type SaveContactsMutationVariables = Exact<{
   input: SaveContactsInput,
 }>
 
-export type SaveContactsMutation = { __typename?: 'Mutation', saveContacts: { __typename?: 'SaveContactsResponse', contacts: Array<{ __typename?: 'Contact', id: any, accountId: any, name?: string | null, kind: ContactKind, value: string, unverifiedValue?: string | null, verifiedAt?: any | null, status: ContactStatus, tag?: string | null, createdAt: any, updatedAt: any }> } }
+export type SaveContactsMutation = { saveContacts: { contacts: Array<{ id: any, accountId: any, name?: string | null, kind: ContactKind, value: string, unverifiedValue?: string | null, verifiedAt?: any | null, status: ContactStatus, tag?: string | null, createdAt: any, updatedAt: any }> } }
 
 export type SaveStoredPreferencesMutationVariables = Exact<{
   input: SaveStoredPreferencesInput,
 }>
 
-export type SaveStoredPreferencesMutation = { __typename?: 'Mutation', saveStoredPreferences: { __typename?: 'SaveStoredPreferencesResponse', success: boolean } }
+export type SaveStoredPreferencesMutation = { saveStoredPreferences: { success: boolean } }
 
 export type SearchContentQueryVariables = Exact<{
   input: SearchContentInput,
 }>
 
-export type SearchContentQuery = { __typename?: 'Query', searchContent: Array<any> }
+export type SearchContentQuery = { searchContent: Array<any> }
 
 export type TrackEventMutationVariables = Exact<{
   input: TrackEventInput,
 }>
 
-export type TrackEventMutation = { __typename?: 'Mutation', trackEvent: { __typename?: 'TrackEventResponse', success: boolean } }
+export type TrackEventMutation = { trackEvent: { success: boolean } }
 
 export type TrackNotificationMutationVariables = Exact<{
   input: TrackNotificationInput,
 }>
 
-export type TrackNotificationMutation = { __typename?: 'Mutation', trackNotification: { __typename?: 'TrackNotificationResponse', success: boolean } }
+export type TrackNotificationMutation = { trackNotification: { success: boolean } }
 
 export type TransferCartMutationVariables = Exact<{
   input: TransferCartInput,
 }>
 
-export type TransferCartMutation = { __typename?: 'Mutation', transferCart: { __typename?: 'Order', id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ __typename?: 'OrderItem', id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { __typename?: 'Item', id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ __typename?: 'Pricing', id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ __typename?: 'CouponRedemption', coupon: { __typename?: 'Coupon', name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> } }
+export type TransferCartMutation = { transferCart: { id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ coupon: { name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> } }
 
 export const AssetFragmentFragmentDoc = gql`
     fragment AssetFragment on Asset {
