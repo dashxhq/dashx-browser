@@ -1,0 +1,5 @@
+mutation AddContent($input: AddContentInput!) {
+  addContent(input: $input) {
+    ...ContentFragment
+  }
+}

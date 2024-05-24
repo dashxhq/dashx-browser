@@ -1,6 +1,4 @@
-// This function does not support nested objects
-// eslint-disable-next-line import/prefer-default-export
-export function parseFilterObject(filterObject: Record<string, any> = {}) {
+const parseFilterObject = (filterObject: Record<string, any> = {}): Record<string, any> => {
   const filterBy: Record<string, any> = {}
 
   Object.keys(filterObject).forEach((key) => {
@@ -11,9 +9,11 @@ export function parseFilterObject(filterObject: Record<string, any> = {}) {
 
     filterBy.data = {
       [key]: filterObject[key],
-      ...filterBy.data
+      ...filterBy.data,
     }
   })
 
   return filterBy
 }
+
+export default parseFilterObject

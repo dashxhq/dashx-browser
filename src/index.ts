@@ -1,6 +1,6 @@
-import Client, { WebsocketMessageType } from './Client'
-import type { ClientParams, InAppNotification, WebsocketMessage } from './Client'
+import Client, { WebsocketMessage } from './Client'
+import type { ClientParams, InAppNotifications, WebsocketMessageType } from './Client'
 
 export default (params: ClientParams): Client => new Client(params)
-export { WebsocketMessageType }
-export type { Client, ClientParams, InAppNotification, WebsocketMessage }
+export { WebsocketMessage }
+export type { Client, ClientParams, InAppNotifications, WebsocketMessageType }

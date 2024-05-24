@@ -1,0 +1,7 @@
+query FetchContacts($input: FetchContactsInput!) {
+  fetchContacts(input: $input) {
+    contacts {
+      ...ContactFragment
+    }
+  }
+}

@@ -1,0 +1,5 @@
+mutation EditContent($input: EditContentInput!) {
+  editContent(input: $input) {
+    ...ContentFragment
+  }
+}

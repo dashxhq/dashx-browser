@@ -1,16 +1,9 @@
-import { parseFilterObject } from './utils'
+import parseFilterObject from './parseFilterObject'
+import type { SearchContentInput } from './generated'
 
-export type ContentOptions = {
+export type ContentOptions = Omit<SearchContentInput, 'returyType' | 'order'> & {
   returnType?: 'all' | 'one',
-  language?: string,
-  include?: Array<string>,
-  exclude?: Array<string>,
-  fields?: Array<string>,
-  preview?: boolean,
-  filter?: Record<string, any>,
   order?: Record<string, 'ASC' | 'DESC'>,
-  limit?: number,
-  page?: number
 }
 
 export type FetchContentOptions = Pick<ContentOptions, 'exclude' | 'include' | 'fields' | 'language' | 'preview'>
@@ -21,8 +14,9 @@ class ContentOptionsBuilder {
   private callback: (options: ContentOptions) => Promise<any>
 
   constructor(
-    callback: (options: ContentOptions) => Promise<any>
+    callback: (options: ContentOptions) => Promise<any>,
   ) {
+    // @ts-ignore
     this.options = {}
     this.callback = callback
   }

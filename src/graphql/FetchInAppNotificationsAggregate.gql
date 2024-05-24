@@ -1,0 +1,5 @@
+query FetchInAppNotificationsAggregate($input: FetchInAppNotificationsAggregateInput!) {
+  notificationsAggregate: fetchInAppNotificationsAggregate(input: $input) {
+    count
+  }
+}

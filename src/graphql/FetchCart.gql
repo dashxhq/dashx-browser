@@ -1,0 +1,5 @@
+query FetchCart($input: FetchCartInput!) {
+  fetchCart(input: $input) {
+    ...CartFragment
+  }
+}

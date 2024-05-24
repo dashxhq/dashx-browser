@@ -1,0 +1,5 @@
+query Asset($id: UUID!) {
+  asset(id: $id) {
+    ...AssetFragment
+  }
+}

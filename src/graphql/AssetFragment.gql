@@ -1,0 +1,17 @@
+fragment AssetFragment on Asset {
+  attributeId
+  createdAt
+  data
+  id
+  mimeType
+  name
+  processingStatus
+  resourceId
+  size
+  storageProviderId
+  updatedAt
+  uploadStatus
+  uploaderId
+  url
+  workspaceId
+}
