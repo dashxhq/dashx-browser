@@ -15,13 +15,11 @@ const config: CodegenConfig = {
         },
         'graphql-codegen-typescript-operation-types',
         'typescript-operations',
-        'typescript-urql',
+        'typed-document-node',
       ],
       config: {
         enumsAsTypes: true,
         omitObjectTypes: true,
-        withHooks: false,
-        skipTypename: true
       },
     },
   },

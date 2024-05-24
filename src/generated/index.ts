@@ -1,5 +1,5 @@
 /* eslint-disable max-len */
-import gql from 'graphql-tag'
+import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/core'
 
 export type Maybe<T> = T | null
 export type InputMaybe<T> = Maybe<T>
@@ -8,7 +8,6 @@ export type MakeOptional<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]?: 
 export type MakeMaybe<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]: Maybe<T[SubKey]> }
 export type MakeEmpty<T extends { [key: string]: unknown }, K extends keyof T> = { [_ in K]?: never }
 export type Incremental<T> = T | { [P in keyof T]?: P extends ' $fragmentName' | '__typename' ? T[P] : never }
-export type Omit<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>
 /** All built-in and custom scalars, mapped to their actual values */
 export type Scalars = {
   ID: { input: string, output: string },
@@ -308,376 +307,154 @@ export type AddContentMutationVariables = Exact<{
   input: AddContentInput,
 }>
 
-export type AddContentMutation = { addContent: { id: any, identifier: string, position: number, data: any, createdAt: any, updatedAt: any } }
+export type AddContentMutation = { __typename?: 'Mutation', addContent: { __typename?: 'CustomContent', id: any, identifier: string, position: number, data: any, createdAt: any, updatedAt: any } }
 
 export type AddItemToCartMutationVariables = Exact<{
   input: AddItemToCartInput,
 }>
 
-export type AddItemToCartMutation = { addItemToCart: { id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ coupon: { name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> } }
+export type AddItemToCartMutation = { __typename?: 'Mutation', addItemToCart: { __typename?: 'Order', id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ __typename?: 'OrderItem', id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { __typename?: 'Item', id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ __typename?: 'Pricing', id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ __typename?: 'CouponRedemption', coupon: { __typename?: 'Coupon', name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> } }
 
 export type ApplyCouponToCartMutationVariables = Exact<{
   input: ApplyCouponToCartInput,
 }>
 
-export type ApplyCouponToCartMutation = { applyCouponToCart: { id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ coupon: { name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> } }
+export type ApplyCouponToCartMutation = { __typename?: 'Mutation', applyCouponToCart: { __typename?: 'Order', id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ __typename?: 'OrderItem', id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { __typename?: 'Item', id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ __typename?: 'Pricing', id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ __typename?: 'CouponRedemption', coupon: { __typename?: 'Coupon', name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> } }
 
 export type AssetQueryVariables = Exact<{
   id: Scalars['UUID']['input'],
 }>
 
-export type AssetQuery = { asset: { attributeId?: any | null, createdAt: any, data: any, id: any, mimeType?: string | null, name?: string | null, processingStatus: AssetProcessingStatus, resourceId?: any | null, size?: number | null, storageProviderId?: any | null, updatedAt: any, uploadStatus: AssetUploadStatus, uploaderId?: any | null, url?: string | null, workspaceId: any } }
+export type AssetQuery = { __typename?: 'Query', asset: { __typename?: 'Asset', attributeId?: any | null, createdAt: any, data: any, id: any, mimeType?: string | null, name?: string | null, processingStatus: AssetProcessingStatus, resourceId?: any | null, size?: number | null, storageProviderId?: any | null, updatedAt: any, uploadStatus: AssetUploadStatus, uploaderId?: any | null, url?: string | null, workspaceId: any } }
 
-export type AssetFragmentFragment = { attributeId?: any | null, createdAt: any, data: any, id: any, mimeType?: string | null, name?: string | null, processingStatus: AssetProcessingStatus, resourceId?: any | null, size?: number | null, storageProviderId?: any | null, updatedAt: any, uploadStatus: AssetUploadStatus, uploaderId?: any | null, url?: string | null, workspaceId: any }
+export type AssetFragmentFragment = { __typename?: 'Asset', attributeId?: any | null, createdAt: any, data: any, id: any, mimeType?: string | null, name?: string | null, processingStatus: AssetProcessingStatus, resourceId?: any | null, size?: number | null, storageProviderId?: any | null, updatedAt: any, uploadStatus: AssetUploadStatus, uploaderId?: any | null, url?: string | null, workspaceId: any }
 
-export type CartFragmentFragment = { id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ coupon: { name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> }
+export type CartFragmentFragment = { __typename?: 'Order', id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ __typename?: 'OrderItem', id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { __typename?: 'Item', id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ __typename?: 'Pricing', id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ __typename?: 'CouponRedemption', coupon: { __typename?: 'Coupon', name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> }
 
-export type ContactFragmentFragment = { id: any, accountId: any, name?: string | null, kind: ContactKind, value: string, unverifiedValue?: string | null, verifiedAt?: any | null, status: ContactStatus, tag?: string | null, createdAt: any, updatedAt: any }
+export type ContactFragmentFragment = { __typename?: 'Contact', id: any, accountId: any, name?: string | null, kind: ContactKind, value: string, unverifiedValue?: string | null, verifiedAt?: any | null, status: ContactStatus, tag?: string | null, createdAt: any, updatedAt: any }
 
-export type ContentFragmentFragment = { id: any, identifier: string, position: number, data: any, createdAt: any, updatedAt: any }
+export type ContentFragmentFragment = { __typename?: 'CustomContent', id: any, identifier: string, position: number, data: any, createdAt: any, updatedAt: any }
 
 export type EditContentMutationVariables = Exact<{
   input: EditContentInput,
 }>
 
-export type EditContentMutation = { editContent: { id: any, identifier: string, position: number, data: any, createdAt: any, updatedAt: any } }
+export type EditContentMutation = { __typename?: 'Mutation', editContent: { __typename?: 'CustomContent', id: any, identifier: string, position: number, data: any, createdAt: any, updatedAt: any } }
 
 export type FetchCartQueryVariables = Exact<{
   input: FetchCartInput,
 }>
 
-export type FetchCartQuery = { fetchCart: { id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ coupon: { name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> } }
+export type FetchCartQuery = { __typename?: 'Query', fetchCart: { __typename?: 'Order', id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ __typename?: 'OrderItem', id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { __typename?: 'Item', id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ __typename?: 'Pricing', id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ __typename?: 'CouponRedemption', coupon: { __typename?: 'Coupon', name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> } }
 
 export type FetchContactsQueryVariables = Exact<{
   input: FetchContactsInput,
 }>
 
-export type FetchContactsQuery = { fetchContacts: { contacts: Array<{ id: any, accountId: any, name?: string | null, kind: ContactKind, value: string, unverifiedValue?: string | null, verifiedAt?: any | null, status: ContactStatus, tag?: string | null, createdAt: any, updatedAt: any }> } }
+export type FetchContactsQuery = { __typename?: 'Query', fetchContacts: { __typename?: 'FetchContactsResponse', contacts: Array<{ __typename?: 'Contact', id: any, accountId: any, name?: string | null, kind: ContactKind, value: string, unverifiedValue?: string | null, verifiedAt?: any | null, status: ContactStatus, tag?: string | null, createdAt: any, updatedAt: any }> } }
 
 export type FetchContentQueryVariables = Exact<{
   input: FetchContentInput,
 }>
 
-export type FetchContentQuery = { fetchContent: any }
+export type FetchContentQuery = { __typename?: 'Query', fetchContent: any }
 
 export type FetchInAppNotificationsQueryVariables = Exact<{
   input: FetchInAppNotificationsInput,
 }>
 
-export type FetchInAppNotificationsQuery = { notifications: Array<{ id: any, sentAt?: any | null, readAt?: any | null, renderedContent: any }> }
+export type FetchInAppNotificationsQuery = { __typename?: 'Query', notifications: Array<{ __typename?: 'Notification', id: any, sentAt?: any | null, readAt?: any | null, renderedContent: any }> }
 
 export type FetchInAppNotificationsAggregateQueryVariables = Exact<{
   input: FetchInAppNotificationsAggregateInput,
 }>
 
-export type FetchInAppNotificationsAggregateQuery = { notificationsAggregate: { count?: number | null } }
+export type FetchInAppNotificationsAggregateQuery = { __typename?: 'Query', notificationsAggregate: { __typename?: 'FetchInAppNotificationsAggregateResponse', count?: number | null } }
 
 export type FetchStoredPreferencesQueryVariables = Exact<{
   input: FetchStoredPreferencesInput,
 }>
 
-export type FetchStoredPreferencesQuery = { fetchStoredPreferences: { preferenceData: any } }
+export type FetchStoredPreferencesQuery = { __typename?: 'Query', fetchStoredPreferences: { __typename?: 'FetchStoredPreferencesResponse', preferenceData: any } }
 
 export type IdentifyAccountMutationVariables = Exact<{
   input: IdentifyAccountInput,
 }>
 
-export type IdentifyAccountMutation = { identifyAccount: { id: any } }
+export type IdentifyAccountMutation = { __typename?: 'Mutation', identifyAccount: { __typename?: 'Account', id: any } }
 
-export type ItemFragmentFragment = { id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> }
+export type ItemFragmentFragment = { __typename?: 'Item', id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ __typename?: 'Pricing', id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> }
 
 export type PrepareAssetMutationVariables = Exact<{
   input: PrepareAssetInput,
 }>
 
-export type PrepareAssetMutation = { prepareAsset: { attributeId?: any | null, createdAt: any, data: any, id: any, mimeType?: string | null, name?: string | null, processingStatus: AssetProcessingStatus, resourceId?: any | null, size?: number | null, storageProviderId?: any | null, updatedAt: any, uploadStatus: AssetUploadStatus, uploaderId?: any | null, url?: string | null, workspaceId: any } }
+export type PrepareAssetMutation = { __typename?: 'Mutation', prepareAsset: { __typename?: 'Asset', attributeId?: any | null, createdAt: any, data: any, id: any, mimeType?: string | null, name?: string | null, processingStatus: AssetProcessingStatus, resourceId?: any | null, size?: number | null, storageProviderId?: any | null, updatedAt: any, uploadStatus: AssetUploadStatus, uploaderId?: any | null, url?: string | null, workspaceId: any } }
 
 export type RemoveCouponFromCartMutationVariables = Exact<{
   input: RemoveCouponFromCartInput,
 }>
 
-export type RemoveCouponFromCartMutation = { removeCouponFromCart: { id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ coupon: { name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> } }
+export type RemoveCouponFromCartMutation = { __typename?: 'Mutation', removeCouponFromCart: { __typename?: 'Order', id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ __typename?: 'OrderItem', id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { __typename?: 'Item', id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ __typename?: 'Pricing', id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ __typename?: 'CouponRedemption', coupon: { __typename?: 'Coupon', name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> } }
 
 export type SaveContactsMutationVariables = Exact<{
   input: SaveContactsInput,
 }>
 
-export type SaveContactsMutation = { saveContacts: { contacts: Array<{ id: any, accountId: any, name?: string | null, kind: ContactKind, value: string, unverifiedValue?: string | null, verifiedAt?: any | null, status: ContactStatus, tag?: string | null, createdAt: any, updatedAt: any }> } }
+export type SaveContactsMutation = { __typename?: 'Mutation', saveContacts: { __typename?: 'SaveContactsResponse', contacts: Array<{ __typename?: 'Contact', id: any, accountId: any, name?: string | null, kind: ContactKind, value: string, unverifiedValue?: string | null, verifiedAt?: any | null, status: ContactStatus, tag?: string | null, createdAt: any, updatedAt: any }> } }
 
 export type SaveStoredPreferencesMutationVariables = Exact<{
   input: SaveStoredPreferencesInput,
 }>
 
-export type SaveStoredPreferencesMutation = { saveStoredPreferences: { success: boolean } }
+export type SaveStoredPreferencesMutation = { __typename?: 'Mutation', saveStoredPreferences: { __typename?: 'SaveStoredPreferencesResponse', success: boolean } }
 
 export type SearchContentQueryVariables = Exact<{
   input: SearchContentInput,
 }>
 
-export type SearchContentQuery = { searchContent: Array<any> }
+export type SearchContentQuery = { __typename?: 'Query', searchContent: Array<any> }
 
 export type TrackEventMutationVariables = Exact<{
   input: TrackEventInput,
 }>
 
-export type TrackEventMutation = { trackEvent: { success: boolean } }
+export type TrackEventMutation = { __typename?: 'Mutation', trackEvent: { __typename?: 'TrackEventResponse', success: boolean } }
 
 export type TrackNotificationMutationVariables = Exact<{
   input: TrackNotificationInput,
 }>
 
-export type TrackNotificationMutation = { trackNotification: { success: boolean } }
+export type TrackNotificationMutation = { __typename?: 'Mutation', trackNotification: { __typename?: 'TrackNotificationResponse', success: boolean } }
 
 export type TransferCartMutationVariables = Exact<{
   input: TransferCartInput,
 }>
 
-export type TransferCartMutation = { transferCart: { id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ coupon: { name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> } }
+export type TransferCartMutation = { __typename?: 'Mutation', transferCart: { __typename?: 'Order', id: any, status: OrderStatus, subtotal: any, discount: any, tax: any, total: any, gatewayMeta?: any | null, currencyCode: string, orderItems: Array<{ __typename?: 'OrderItem', id: any, quantity: any, unitPrice: any, subtotal: any, discount: any, tax: any, total: any, custom: any, currencyCode: string, item: { __typename?: 'Item', id: any, name: string, identifier: string, description?: string | null, createdAt: any, updatedAt: any, pricings: Array<{ __typename?: 'Pricing', id: any, kind: PricingKind, amount: any, originalAmount?: any | null, isRecurring: boolean, recurringInterval: number, recurringIntervalUnit: PricingRecurringIntervalUnit, appleProductIdentifier?: string | null, googleProductIdentifier?: string | null, currencyCode: string, createdAt: any, updatedAt: any }> } }>, couponRedemptions: Array<{ __typename?: 'CouponRedemption', coupon: { __typename?: 'Coupon', name: string, identifier: string, discountType: CouponDiscountType, discountAmount: any, currencyCode?: string | null, expiresAt?: any | null } }> } }
 
-export const AssetFragmentFragmentDoc = gql`
-    fragment AssetFragment on Asset {
-  attributeId
-  createdAt
-  data
-  id
-  mimeType
-  name
-  processingStatus
-  resourceId
-  size
-  storageProviderId
-  updatedAt
-  uploadStatus
-  uploaderId
-  url
-  workspaceId
-}
-    `
-export const ItemFragmentFragmentDoc = gql`
-    fragment ItemFragment on Item {
-  id
-  name
-  identifier
-  description
-  createdAt
-  updatedAt
-  pricings {
-    id
-    kind
-    amount
-    originalAmount
-    isRecurring
-    recurringInterval
-    recurringIntervalUnit
-    appleProductIdentifier
-    googleProductIdentifier
-    currencyCode
-    createdAt
-    updatedAt
-  }
-}
-    `
-export const CartFragmentFragmentDoc = gql`
-    fragment CartFragment on Order {
-  id
-  status
-  subtotal
-  discount
-  tax
-  total
-  gatewayMeta
-  currencyCode
-  orderItems {
-    id
-    quantity
-    unitPrice
-    subtotal
-    discount
-    tax
-    total
-    custom
-    currencyCode
-    item {
-      ...ItemFragment
-    }
-  }
-  couponRedemptions {
-    coupon {
-      name
-      identifier
-      discountType
-      discountAmount
-      currencyCode
-      expiresAt
-    }
-  }
-}
-    ${ItemFragmentFragmentDoc}`
-export const ContactFragmentFragmentDoc = gql`
-    fragment ContactFragment on Contact {
-  id
-  accountId
-  name
-  kind
-  value
-  unverifiedValue
-  verifiedAt
-  status
-  tag
-  createdAt
-  updatedAt
-}
-    `
-export const ContentFragmentFragmentDoc = gql`
-    fragment ContentFragment on CustomContent {
-  id
-  identifier
-  position
-  data
-  createdAt
-  updatedAt
-}
-    `
-export const AddContentDocument = gql`
-    mutation AddContent($input: AddContentInput!) {
-  addContent(input: $input) {
-    ...ContentFragment
-  }
-}
-    ${ContentFragmentFragmentDoc}`
-export const AddItemToCartDocument = gql`
-    mutation AddItemToCart($input: AddItemToCartInput!) {
-  addItemToCart(input: $input) {
-    ...CartFragment
-  }
-}
-    ${CartFragmentFragmentDoc}`
-export const ApplyCouponToCartDocument = gql`
-    mutation ApplyCouponToCart($input: ApplyCouponToCartInput!) {
-  applyCouponToCart(input: $input) {
-    ...CartFragment
-  }
-}
-    ${CartFragmentFragmentDoc}`
-export const AssetDocument = gql`
-    query Asset($id: UUID!) {
-  asset(id: $id) {
-    ...AssetFragment
-  }
-}
-    ${AssetFragmentFragmentDoc}`
-export const EditContentDocument = gql`
-    mutation EditContent($input: EditContentInput!) {
-  editContent(input: $input) {
-    ...ContentFragment
-  }
-}
-    ${ContentFragmentFragmentDoc}`
-export const FetchCartDocument = gql`
-    query FetchCart($input: FetchCartInput!) {
-  fetchCart(input: $input) {
-    ...CartFragment
-  }
-}
-    ${CartFragmentFragmentDoc}`
-export const FetchContactsDocument = gql`
-    query FetchContacts($input: FetchContactsInput!) {
-  fetchContacts(input: $input) {
-    contacts {
-      ...ContactFragment
-    }
-  }
-}
-    ${ContactFragmentFragmentDoc}`
-export const FetchContentDocument = gql`
-    query FetchContent($input: FetchContentInput!) {
-  fetchContent(input: $input)
-}
-    `
-export const FetchInAppNotificationsDocument = gql`
-    query FetchInAppNotifications($input: FetchInAppNotificationsInput!) {
-  notifications: fetchInAppNotifications(input: $input) {
-    id
-    sentAt
-    readAt
-    renderedContent
-  }
-}
-    `
-export const FetchInAppNotificationsAggregateDocument = gql`
-    query FetchInAppNotificationsAggregate($input: FetchInAppNotificationsAggregateInput!) {
-  notificationsAggregate: fetchInAppNotificationsAggregate(input: $input) {
-    count
-  }
-}
-    `
-export const FetchStoredPreferencesDocument = gql`
-    query FetchStoredPreferences($input: FetchStoredPreferencesInput!) {
-  fetchStoredPreferences(input: $input) {
-    preferenceData
-  }
-}
-    `
-export const IdentifyAccountDocument = gql`
-    mutation IdentifyAccount($input: IdentifyAccountInput!) {
-  identifyAccount(input: $input) {
-    id
-  }
-}
-    `
-export const PrepareAssetDocument = gql`
-    mutation prepareAsset($input: PrepareAssetInput!) {
-  prepareAsset(input: $input) {
-    ...AssetFragment
-  }
-}
-    ${AssetFragmentFragmentDoc}`
-export const RemoveCouponFromCartDocument = gql`
-    mutation RemoveCouponFromCart($input: RemoveCouponFromCartInput!) {
-  removeCouponFromCart(input: $input) {
-    ...CartFragment
-  }
-}
-    ${CartFragmentFragmentDoc}`
-export const SaveContactsDocument = gql`
-    mutation SaveContacts($input: SaveContactsInput!) {
-  saveContacts(input: $input) {
-    contacts {
-      ...ContactFragment
-    }
-  }
-}
-    ${ContactFragmentFragmentDoc}`
-export const SaveStoredPreferencesDocument = gql`
-    mutation SaveStoredPreferences($input: SaveStoredPreferencesInput!) {
-  saveStoredPreferences(input: $input) {
-    success
-  }
-}
-    `
-export const SearchContentDocument = gql`
-    query SearchContent($input: SearchContentInput!) {
-  searchContent(input: $input)
-}
-    `
-export const TrackEventDocument = gql`
-    mutation TrackEvent($input: TrackEventInput!) {
-  trackEvent(input: $input) {
-    success
-  }
-}
-    `
-export const TrackNotificationDocument = gql`
-    mutation TrackNotification($input: TrackNotificationInput!) {
-  trackNotification(input: $input) {
-    success
-  }
-}
-    `
-export const TransferCartDocument = gql`
-    mutation TransferCart($input: TransferCartInput!) {
-  transferCart(input: $input) {
-    ...CartFragment
-  }
-}
-    ${CartFragmentFragmentDoc}`
+export const AssetFragmentFragmentDoc = { kind: 'Document', definitions: [ { kind: 'FragmentDefinition', name: { kind: 'Name', value: 'AssetFragment' }, typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Asset' } }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'attributeId' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'data' } }, { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'mimeType' } }, { kind: 'Field', name: { kind: 'Name', value: 'name' } }, { kind: 'Field', name: { kind: 'Name', value: 'processingStatus' } }, { kind: 'Field', name: { kind: 'Name', value: 'resourceId' } }, { kind: 'Field', name: { kind: 'Name', value: 'size' } }, { kind: 'Field', name: { kind: 'Name', value: 'storageProviderId' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'uploadStatus' } }, { kind: 'Field', name: { kind: 'Name', value: 'uploaderId' } }, { kind: 'Field', name: { kind: 'Name', value: 'url' } }, { kind: 'Field', name: { kind: 'Name', value: 'workspaceId' } } ] } } ] } as unknown as DocumentNode<AssetFragmentFragment, unknown>
+export const ItemFragmentFragmentDoc = { kind: 'Document', definitions: [ { kind: 'FragmentDefinition', name: { kind: 'Name', value: 'ItemFragment' }, typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Item' } }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'name' } }, { kind: 'Field', name: { kind: 'Name', value: 'identifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'description' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'pricings' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'kind' } }, { kind: 'Field', name: { kind: 'Name', value: 'amount' } }, { kind: 'Field', name: { kind: 'Name', value: 'originalAmount' } }, { kind: 'Field', name: { kind: 'Name', value: 'isRecurring' } }, { kind: 'Field', name: { kind: 'Name', value: 'recurringInterval' } }, { kind: 'Field', name: { kind: 'Name', value: 'recurringIntervalUnit' } }, { kind: 'Field', name: { kind: 'Name', value: 'appleProductIdentifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'googleProductIdentifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } } ] } } ] } } ] } as unknown as DocumentNode<ItemFragmentFragment, unknown>
+export const CartFragmentFragmentDoc = { kind: 'Document', definitions: [ { kind: 'FragmentDefinition', name: { kind: 'Name', value: 'CartFragment' }, typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Order' } }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'status' } }, { kind: 'Field', name: { kind: 'Name', value: 'subtotal' } }, { kind: 'Field', name: { kind: 'Name', value: 'discount' } }, { kind: 'Field', name: { kind: 'Name', value: 'tax' } }, { kind: 'Field', name: { kind: 'Name', value: 'total' } }, { kind: 'Field', name: { kind: 'Name', value: 'gatewayMeta' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'orderItems' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'quantity' } }, { kind: 'Field', name: { kind: 'Name', value: 'unitPrice' } }, { kind: 'Field', name: { kind: 'Name', value: 'subtotal' } }, { kind: 'Field', name: { kind: 'Name', value: 'discount' } }, { kind: 'Field', name: { kind: 'Name', value: 'tax' } }, { kind: 'Field', name: { kind: 'Name', value: 'total' } }, { kind: 'Field', name: { kind: 'Name', value: 'custom' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'item' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'FragmentSpread', name: { kind: 'Name', value: 'ItemFragment' } } ] } } ] } }, { kind: 'Field', name: { kind: 'Name', value: 'couponRedemptions' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'coupon' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'name' } }, { kind: 'Field', name: { kind: 'Name', value: 'identifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'discountType' } }, { kind: 'Field', name: { kind: 'Name', value: 'discountAmount' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'expiresAt' } } ] } } ] } } ] } }, { kind: 'FragmentDefinition', name: { kind: 'Name', value: 'ItemFragment' }, typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Item' } }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'name' } }, { kind: 'Field', name: { kind: 'Name', value: 'identifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'description' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'pricings' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'kind' } }, { kind: 'Field', name: { kind: 'Name', value: 'amount' } }, { kind: 'Field', name: { kind: 'Name', value: 'originalAmount' } }, { kind: 'Field', name: { kind: 'Name', value: 'isRecurring' } }, { kind: 'Field', name: { kind: 'Name', value: 'recurringInterval' } }, { kind: 'Field', name: { kind: 'Name', value: 'recurringIntervalUnit' } }, { kind: 'Field', name: { kind: 'Name', value: 'appleProductIdentifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'googleProductIdentifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } } ] } } ] } } ] } as unknown as DocumentNode<CartFragmentFragment, unknown>
+export const ContactFragmentFragmentDoc = { kind: 'Document', definitions: [ { kind: 'FragmentDefinition', name: { kind: 'Name', value: 'ContactFragment' }, typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Contact' } }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'accountId' } }, { kind: 'Field', name: { kind: 'Name', value: 'name' } }, { kind: 'Field', name: { kind: 'Name', value: 'kind' } }, { kind: 'Field', name: { kind: 'Name', value: 'value' } }, { kind: 'Field', name: { kind: 'Name', value: 'unverifiedValue' } }, { kind: 'Field', name: { kind: 'Name', value: 'verifiedAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'status' } }, { kind: 'Field', name: { kind: 'Name', value: 'tag' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } } ] } } ] } as unknown as DocumentNode<ContactFragmentFragment, unknown>
+export const ContentFragmentFragmentDoc = { kind: 'Document', definitions: [ { kind: 'FragmentDefinition', name: { kind: 'Name', value: 'ContentFragment' }, typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'CustomContent' } }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'identifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'position' } }, { kind: 'Field', name: { kind: 'Name', value: 'data' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } } ] } } ] } as unknown as DocumentNode<ContentFragmentFragment, unknown>
+export const AddContentDocument = { kind: 'Document', definitions: [ { kind: 'OperationDefinition', operation: 'mutation', name: { kind: 'Name', value: 'AddContent' }, variableDefinitions: [ { kind: 'VariableDefinition', variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } }, type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'AddContentInput' } } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'addContent' }, arguments: [ { kind: 'Argument', name: { kind: 'Name', value: 'input' }, value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'FragmentSpread', name: { kind: 'Name', value: 'ContentFragment' } } ] } } ] } }, { kind: 'FragmentDefinition', name: { kind: 'Name', value: 'ContentFragment' }, typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'CustomContent' } }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'identifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'position' } }, { kind: 'Field', name: { kind: 'Name', value: 'data' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } } ] } } ] } as unknown as DocumentNode<AddContentMutation, AddContentMutationVariables>
+export const AddItemToCartDocument = { kind: 'Document', definitions: [ { kind: 'OperationDefinition', operation: 'mutation', name: { kind: 'Name', value: 'AddItemToCart' }, variableDefinitions: [ { kind: 'VariableDefinition', variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } }, type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'AddItemToCartInput' } } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'addItemToCart' }, arguments: [ { kind: 'Argument', name: { kind: 'Name', value: 'input' }, value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'FragmentSpread', name: { kind: 'Name', value: 'CartFragment' } } ] } } ] } }, { kind: 'FragmentDefinition', name: { kind: 'Name', value: 'ItemFragment' }, typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Item' } }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'name' } }, { kind: 'Field', name: { kind: 'Name', value: 'identifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'description' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'pricings' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'kind' } }, { kind: 'Field', name: { kind: 'Name', value: 'amount' } }, { kind: 'Field', name: { kind: 'Name', value: 'originalAmount' } }, { kind: 'Field', name: { kind: 'Name', value: 'isRecurring' } }, { kind: 'Field', name: { kind: 'Name', value: 'recurringInterval' } }, { kind: 'Field', name: { kind: 'Name', value: 'recurringIntervalUnit' } }, { kind: 'Field', name: { kind: 'Name', value: 'appleProductIdentifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'googleProductIdentifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } } ] } } ] } }, { kind: 'FragmentDefinition', name: { kind: 'Name', value: 'CartFragment' }, typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Order' } }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'status' } }, { kind: 'Field', name: { kind: 'Name', value: 'subtotal' } }, { kind: 'Field', name: { kind: 'Name', value: 'discount' } }, { kind: 'Field', name: { kind: 'Name', value: 'tax' } }, { kind: 'Field', name: { kind: 'Name', value: 'total' } }, { kind: 'Field', name: { kind: 'Name', value: 'gatewayMeta' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'orderItems' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'quantity' } }, { kind: 'Field', name: { kind: 'Name', value: 'unitPrice' } }, { kind: 'Field', name: { kind: 'Name', value: 'subtotal' } }, { kind: 'Field', name: { kind: 'Name', value: 'discount' } }, { kind: 'Field', name: { kind: 'Name', value: 'tax' } }, { kind: 'Field', name: { kind: 'Name', value: 'total' } }, { kind: 'Field', name: { kind: 'Name', value: 'custom' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'item' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'FragmentSpread', name: { kind: 'Name', value: 'ItemFragment' } } ] } } ] } }, { kind: 'Field', name: { kind: 'Name', value: 'couponRedemptions' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'coupon' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'name' } }, { kind: 'Field', name: { kind: 'Name', value: 'identifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'discountType' } }, { kind: 'Field', name: { kind: 'Name', value: 'discountAmount' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'expiresAt' } } ] } } ] } } ] } } ] } as unknown as DocumentNode<AddItemToCartMutation, AddItemToCartMutationVariables>
+export const ApplyCouponToCartDocument = { kind: 'Document', definitions: [ { kind: 'OperationDefinition', operation: 'mutation', name: { kind: 'Name', value: 'ApplyCouponToCart' }, variableDefinitions: [ { kind: 'VariableDefinition', variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } }, type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ApplyCouponToCartInput' } } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'applyCouponToCart' }, arguments: [ { kind: 'Argument', name: { kind: 'Name', value: 'input' }, value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'FragmentSpread', name: { kind: 'Name', value: 'CartFragment' } } ] } } ] } }, { kind: 'FragmentDefinition', name: { kind: 'Name', value: 'ItemFragment' }, typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Item' } }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'name' } }, { kind: 'Field', name: { kind: 'Name', value: 'identifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'description' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'pricings' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'kind' } }, { kind: 'Field', name: { kind: 'Name', value: 'amount' } }, { kind: 'Field', name: { kind: 'Name', value: 'originalAmount' } }, { kind: 'Field', name: { kind: 'Name', value: 'isRecurring' } }, { kind: 'Field', name: { kind: 'Name', value: 'recurringInterval' } }, { kind: 'Field', name: { kind: 'Name', value: 'recurringIntervalUnit' } }, { kind: 'Field', name: { kind: 'Name', value: 'appleProductIdentifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'googleProductIdentifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } } ] } } ] } }, { kind: 'FragmentDefinition', name: { kind: 'Name', value: 'CartFragment' }, typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Order' } }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'status' } }, { kind: 'Field', name: { kind: 'Name', value: 'subtotal' } }, { kind: 'Field', name: { kind: 'Name', value: 'discount' } }, { kind: 'Field', name: { kind: 'Name', value: 'tax' } }, { kind: 'Field', name: { kind: 'Name', value: 'total' } }, { kind: 'Field', name: { kind: 'Name', value: 'gatewayMeta' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'orderItems' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'quantity' } }, { kind: 'Field', name: { kind: 'Name', value: 'unitPrice' } }, { kind: 'Field', name: { kind: 'Name', value: 'subtotal' } }, { kind: 'Field', name: { kind: 'Name', value: 'discount' } }, { kind: 'Field', name: { kind: 'Name', value: 'tax' } }, { kind: 'Field', name: { kind: 'Name', value: 'total' } }, { kind: 'Field', name: { kind: 'Name', value: 'custom' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'item' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'FragmentSpread', name: { kind: 'Name', value: 'ItemFragment' } } ] } } ] } }, { kind: 'Field', name: { kind: 'Name', value: 'couponRedemptions' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'coupon' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'name' } }, { kind: 'Field', name: { kind: 'Name', value: 'identifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'discountType' } }, { kind: 'Field', name: { kind: 'Name', value: 'discountAmount' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'expiresAt' } } ] } } ] } } ] } } ] } as unknown as DocumentNode<ApplyCouponToCartMutation, ApplyCouponToCartMutationVariables>
+export const AssetDocument = { kind: 'Document', definitions: [ { kind: 'OperationDefinition', operation: 'query', name: { kind: 'Name', value: 'Asset' }, variableDefinitions: [ { kind: 'VariableDefinition', variable: { kind: 'Variable', name: { kind: 'Name', value: 'id' } }, type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'UUID' } } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'asset' }, arguments: [ { kind: 'Argument', name: { kind: 'Name', value: 'id' }, value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'FragmentSpread', name: { kind: 'Name', value: 'AssetFragment' } } ] } } ] } }, { kind: 'FragmentDefinition', name: { kind: 'Name', value: 'AssetFragment' }, typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Asset' } }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'attributeId' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'data' } }, { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'mimeType' } }, { kind: 'Field', name: { kind: 'Name', value: 'name' } }, { kind: 'Field', name: { kind: 'Name', value: 'processingStatus' } }, { kind: 'Field', name: { kind: 'Name', value: 'resourceId' } }, { kind: 'Field', name: { kind: 'Name', value: 'size' } }, { kind: 'Field', name: { kind: 'Name', value: 'storageProviderId' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'uploadStatus' } }, { kind: 'Field', name: { kind: 'Name', value: 'uploaderId' } }, { kind: 'Field', name: { kind: 'Name', value: 'url' } }, { kind: 'Field', name: { kind: 'Name', value: 'workspaceId' } } ] } } ] } as unknown as DocumentNode<AssetQuery, AssetQueryVariables>
+export const EditContentDocument = { kind: 'Document', definitions: [ { kind: 'OperationDefinition', operation: 'mutation', name: { kind: 'Name', value: 'EditContent' }, variableDefinitions: [ { kind: 'VariableDefinition', variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } }, type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'EditContentInput' } } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'editContent' }, arguments: [ { kind: 'Argument', name: { kind: 'Name', value: 'input' }, value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'FragmentSpread', name: { kind: 'Name', value: 'ContentFragment' } } ] } } ] } }, { kind: 'FragmentDefinition', name: { kind: 'Name', value: 'ContentFragment' }, typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'CustomContent' } }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'identifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'position' } }, { kind: 'Field', name: { kind: 'Name', value: 'data' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } } ] } } ] } as unknown as DocumentNode<EditContentMutation, EditContentMutationVariables>
+export const FetchCartDocument = { kind: 'Document', definitions: [ { kind: 'OperationDefinition', operation: 'query', name: { kind: 'Name', value: 'FetchCart' }, variableDefinitions: [ { kind: 'VariableDefinition', variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } }, type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'FetchCartInput' } } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'fetchCart' }, arguments: [ { kind: 'Argument', name: { kind: 'Name', value: 'input' }, value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'FragmentSpread', name: { kind: 'Name', value: 'CartFragment' } } ] } } ] } }, { kind: 'FragmentDefinition', name: { kind: 'Name', value: 'ItemFragment' }, typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Item' } }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'name' } }, { kind: 'Field', name: { kind: 'Name', value: 'identifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'description' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'pricings' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'kind' } }, { kind: 'Field', name: { kind: 'Name', value: 'amount' } }, { kind: 'Field', name: { kind: 'Name', value: 'originalAmount' } }, { kind: 'Field', name: { kind: 'Name', value: 'isRecurring' } }, { kind: 'Field', name: { kind: 'Name', value: 'recurringInterval' } }, { kind: 'Field', name: { kind: 'Name', value: 'recurringIntervalUnit' } }, { kind: 'Field', name: { kind: 'Name', value: 'appleProductIdentifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'googleProductIdentifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } } ] } } ] } }, { kind: 'FragmentDefinition', name: { kind: 'Name', value: 'CartFragment' }, typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Order' } }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'status' } }, { kind: 'Field', name: { kind: 'Name', value: 'subtotal' } }, { kind: 'Field', name: { kind: 'Name', value: 'discount' } }, { kind: 'Field', name: { kind: 'Name', value: 'tax' } }, { kind: 'Field', name: { kind: 'Name', value: 'total' } }, { kind: 'Field', name: { kind: 'Name', value: 'gatewayMeta' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'orderItems' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'quantity' } }, { kind: 'Field', name: { kind: 'Name', value: 'unitPrice' } }, { kind: 'Field', name: { kind: 'Name', value: 'subtotal' } }, { kind: 'Field', name: { kind: 'Name', value: 'discount' } }, { kind: 'Field', name: { kind: 'Name', value: 'tax' } }, { kind: 'Field', name: { kind: 'Name', value: 'total' } }, { kind: 'Field', name: { kind: 'Name', value: 'custom' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'item' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'FragmentSpread', name: { kind: 'Name', value: 'ItemFragment' } } ] } } ] } }, { kind: 'Field', name: { kind: 'Name', value: 'couponRedemptions' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'coupon' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'name' } }, { kind: 'Field', name: { kind: 'Name', value: 'identifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'discountType' } }, { kind: 'Field', name: { kind: 'Name', value: 'discountAmount' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'expiresAt' } } ] } } ] } } ] } } ] } as unknown as DocumentNode<FetchCartQuery, FetchCartQueryVariables>
+export const FetchContactsDocument = { kind: 'Document', definitions: [ { kind: 'OperationDefinition', operation: 'query', name: { kind: 'Name', value: 'FetchContacts' }, variableDefinitions: [ { kind: 'VariableDefinition', variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } }, type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'FetchContactsInput' } } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'fetchContacts' }, arguments: [ { kind: 'Argument', name: { kind: 'Name', value: 'input' }, value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'contacts' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'FragmentSpread', name: { kind: 'Name', value: 'ContactFragment' } } ] } } ] } } ] } }, { kind: 'FragmentDefinition', name: { kind: 'Name', value: 'ContactFragment' }, typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Contact' } }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'accountId' } }, { kind: 'Field', name: { kind: 'Name', value: 'name' } }, { kind: 'Field', name: { kind: 'Name', value: 'kind' } }, { kind: 'Field', name: { kind: 'Name', value: 'value' } }, { kind: 'Field', name: { kind: 'Name', value: 'unverifiedValue' } }, { kind: 'Field', name: { kind: 'Name', value: 'verifiedAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'status' } }, { kind: 'Field', name: { kind: 'Name', value: 'tag' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } } ] } } ] } as unknown as DocumentNode<FetchContactsQuery, FetchContactsQueryVariables>
+export const FetchContentDocument = { kind: 'Document', definitions: [ { kind: 'OperationDefinition', operation: 'query', name: { kind: 'Name', value: 'FetchContent' }, variableDefinitions: [ { kind: 'VariableDefinition', variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } }, type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'FetchContentInput' } } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'fetchContent' }, arguments: [ { kind: 'Argument', name: { kind: 'Name', value: 'input' }, value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } } } ] } ] } } ] } as unknown as DocumentNode<FetchContentQuery, FetchContentQueryVariables>
+export const FetchInAppNotificationsDocument = { kind: 'Document', definitions: [ { kind: 'OperationDefinition', operation: 'query', name: { kind: 'Name', value: 'FetchInAppNotifications' }, variableDefinitions: [ { kind: 'VariableDefinition', variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } }, type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'FetchInAppNotificationsInput' } } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', alias: { kind: 'Name', value: 'notifications' }, name: { kind: 'Name', value: 'fetchInAppNotifications' }, arguments: [ { kind: 'Argument', name: { kind: 'Name', value: 'input' }, value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'sentAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'readAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'renderedContent' } } ] } } ] } } ] } as unknown as DocumentNode<FetchInAppNotificationsQuery, FetchInAppNotificationsQueryVariables>
+export const FetchInAppNotificationsAggregateDocument = { kind: 'Document', definitions: [ { kind: 'OperationDefinition', operation: 'query', name: { kind: 'Name', value: 'FetchInAppNotificationsAggregate' }, variableDefinitions: [ { kind: 'VariableDefinition', variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } }, type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'FetchInAppNotificationsAggregateInput' } } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', alias: { kind: 'Name', value: 'notificationsAggregate' }, name: { kind: 'Name', value: 'fetchInAppNotificationsAggregate' }, arguments: [ { kind: 'Argument', name: { kind: 'Name', value: 'input' }, value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'count' } } ] } } ] } } ] } as unknown as DocumentNode<FetchInAppNotificationsAggregateQuery, FetchInAppNotificationsAggregateQueryVariables>
+export const FetchStoredPreferencesDocument = { kind: 'Document', definitions: [ { kind: 'OperationDefinition', operation: 'query', name: { kind: 'Name', value: 'FetchStoredPreferences' }, variableDefinitions: [ { kind: 'VariableDefinition', variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } }, type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'FetchStoredPreferencesInput' } } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'fetchStoredPreferences' }, arguments: [ { kind: 'Argument', name: { kind: 'Name', value: 'input' }, value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'preferenceData' } } ] } } ] } } ] } as unknown as DocumentNode<FetchStoredPreferencesQuery, FetchStoredPreferencesQueryVariables>
+export const IdentifyAccountDocument = { kind: 'Document', definitions: [ { kind: 'OperationDefinition', operation: 'mutation', name: { kind: 'Name', value: 'IdentifyAccount' }, variableDefinitions: [ { kind: 'VariableDefinition', variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } }, type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'IdentifyAccountInput' } } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'identifyAccount' }, arguments: [ { kind: 'Argument', name: { kind: 'Name', value: 'input' }, value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } } ] } } ] } } ] } as unknown as DocumentNode<IdentifyAccountMutation, IdentifyAccountMutationVariables>
+export const PrepareAssetDocument = { kind: 'Document', definitions: [ { kind: 'OperationDefinition', operation: 'mutation', name: { kind: 'Name', value: 'prepareAsset' }, variableDefinitions: [ { kind: 'VariableDefinition', variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } }, type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'PrepareAssetInput' } } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'prepareAsset' }, arguments: [ { kind: 'Argument', name: { kind: 'Name', value: 'input' }, value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'FragmentSpread', name: { kind: 'Name', value: 'AssetFragment' } } ] } } ] } }, { kind: 'FragmentDefinition', name: { kind: 'Name', value: 'AssetFragment' }, typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Asset' } }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'attributeId' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'data' } }, { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'mimeType' } }, { kind: 'Field', name: { kind: 'Name', value: 'name' } }, { kind: 'Field', name: { kind: 'Name', value: 'processingStatus' } }, { kind: 'Field', name: { kind: 'Name', value: 'resourceId' } }, { kind: 'Field', name: { kind: 'Name', value: 'size' } }, { kind: 'Field', name: { kind: 'Name', value: 'storageProviderId' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'uploadStatus' } }, { kind: 'Field', name: { kind: 'Name', value: 'uploaderId' } }, { kind: 'Field', name: { kind: 'Name', value: 'url' } }, { kind: 'Field', name: { kind: 'Name', value: 'workspaceId' } } ] } } ] } as unknown as DocumentNode<PrepareAssetMutation, PrepareAssetMutationVariables>
+export const RemoveCouponFromCartDocument = { kind: 'Document', definitions: [ { kind: 'OperationDefinition', operation: 'mutation', name: { kind: 'Name', value: 'RemoveCouponFromCart' }, variableDefinitions: [ { kind: 'VariableDefinition', variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } }, type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'RemoveCouponFromCartInput' } } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'removeCouponFromCart' }, arguments: [ { kind: 'Argument', name: { kind: 'Name', value: 'input' }, value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'FragmentSpread', name: { kind: 'Name', value: 'CartFragment' } } ] } } ] } }, { kind: 'FragmentDefinition', name: { kind: 'Name', value: 'ItemFragment' }, typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Item' } }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'name' } }, { kind: 'Field', name: { kind: 'Name', value: 'identifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'description' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'pricings' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'kind' } }, { kind: 'Field', name: { kind: 'Name', value: 'amount' } }, { kind: 'Field', name: { kind: 'Name', value: 'originalAmount' } }, { kind: 'Field', name: { kind: 'Name', value: 'isRecurring' } }, { kind: 'Field', name: { kind: 'Name', value: 'recurringInterval' } }, { kind: 'Field', name: { kind: 'Name', value: 'recurringIntervalUnit' } }, { kind: 'Field', name: { kind: 'Name', value: 'appleProductIdentifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'googleProductIdentifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } } ] } } ] } }, { kind: 'FragmentDefinition', name: { kind: 'Name', value: 'CartFragment' }, typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Order' } }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'status' } }, { kind: 'Field', name: { kind: 'Name', value: 'subtotal' } }, { kind: 'Field', name: { kind: 'Name', value: 'discount' } }, { kind: 'Field', name: { kind: 'Name', value: 'tax' } }, { kind: 'Field', name: { kind: 'Name', value: 'total' } }, { kind: 'Field', name: { kind: 'Name', value: 'gatewayMeta' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'orderItems' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'quantity' } }, { kind: 'Field', name: { kind: 'Name', value: 'unitPrice' } }, { kind: 'Field', name: { kind: 'Name', value: 'subtotal' } }, { kind: 'Field', name: { kind: 'Name', value: 'discount' } }, { kind: 'Field', name: { kind: 'Name', value: 'tax' } }, { kind: 'Field', name: { kind: 'Name', value: 'total' } }, { kind: 'Field', name: { kind: 'Name', value: 'custom' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'item' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'FragmentSpread', name: { kind: 'Name', value: 'ItemFragment' } } ] } } ] } }, { kind: 'Field', name: { kind: 'Name', value: 'couponRedemptions' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'coupon' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'name' } }, { kind: 'Field', name: { kind: 'Name', value: 'identifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'discountType' } }, { kind: 'Field', name: { kind: 'Name', value: 'discountAmount' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'expiresAt' } } ] } } ] } } ] } } ] } as unknown as DocumentNode<RemoveCouponFromCartMutation, RemoveCouponFromCartMutationVariables>
+export const SaveContactsDocument = { kind: 'Document', definitions: [ { kind: 'OperationDefinition', operation: 'mutation', name: { kind: 'Name', value: 'SaveContacts' }, variableDefinitions: [ { kind: 'VariableDefinition', variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } }, type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'SaveContactsInput' } } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'saveContacts' }, arguments: [ { kind: 'Argument', name: { kind: 'Name', value: 'input' }, value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'contacts' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'FragmentSpread', name: { kind: 'Name', value: 'ContactFragment' } } ] } } ] } } ] } }, { kind: 'FragmentDefinition', name: { kind: 'Name', value: 'ContactFragment' }, typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Contact' } }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'accountId' } }, { kind: 'Field', name: { kind: 'Name', value: 'name' } }, { kind: 'Field', name: { kind: 'Name', value: 'kind' } }, { kind: 'Field', name: { kind: 'Name', value: 'value' } }, { kind: 'Field', name: { kind: 'Name', value: 'unverifiedValue' } }, { kind: 'Field', name: { kind: 'Name', value: 'verifiedAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'status' } }, { kind: 'Field', name: { kind: 'Name', value: 'tag' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } } ] } } ] } as unknown as DocumentNode<SaveContactsMutation, SaveContactsMutationVariables>
+export const SaveStoredPreferencesDocument = { kind: 'Document', definitions: [ { kind: 'OperationDefinition', operation: 'mutation', name: { kind: 'Name', value: 'SaveStoredPreferences' }, variableDefinitions: [ { kind: 'VariableDefinition', variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } }, type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'SaveStoredPreferencesInput' } } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'saveStoredPreferences' }, arguments: [ { kind: 'Argument', name: { kind: 'Name', value: 'input' }, value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'success' } } ] } } ] } } ] } as unknown as DocumentNode<SaveStoredPreferencesMutation, SaveStoredPreferencesMutationVariables>
+export const SearchContentDocument = { kind: 'Document', definitions: [ { kind: 'OperationDefinition', operation: 'query', name: { kind: 'Name', value: 'SearchContent' }, variableDefinitions: [ { kind: 'VariableDefinition', variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } }, type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'SearchContentInput' } } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'searchContent' }, arguments: [ { kind: 'Argument', name: { kind: 'Name', value: 'input' }, value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } } } ] } ] } } ] } as unknown as DocumentNode<SearchContentQuery, SearchContentQueryVariables>
+export const TrackEventDocument = { kind: 'Document', definitions: [ { kind: 'OperationDefinition', operation: 'mutation', name: { kind: 'Name', value: 'TrackEvent' }, variableDefinitions: [ { kind: 'VariableDefinition', variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } }, type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'TrackEventInput' } } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'trackEvent' }, arguments: [ { kind: 'Argument', name: { kind: 'Name', value: 'input' }, value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'success' } } ] } } ] } } ] } as unknown as DocumentNode<TrackEventMutation, TrackEventMutationVariables>
+export const TrackNotificationDocument = { kind: 'Document', definitions: [ { kind: 'OperationDefinition', operation: 'mutation', name: { kind: 'Name', value: 'TrackNotification' }, variableDefinitions: [ { kind: 'VariableDefinition', variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } }, type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'TrackNotificationInput' } } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'trackNotification' }, arguments: [ { kind: 'Argument', name: { kind: 'Name', value: 'input' }, value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'success' } } ] } } ] } } ] } as unknown as DocumentNode<TrackNotificationMutation, TrackNotificationMutationVariables>
+export const TransferCartDocument = { kind: 'Document', definitions: [ { kind: 'OperationDefinition', operation: 'mutation', name: { kind: 'Name', value: 'TransferCart' }, variableDefinitions: [ { kind: 'VariableDefinition', variable: { kind: 'Variable', name: { kind: 'Name', value: 'input' } }, type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'TransferCartInput' } } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'transferCart' }, arguments: [ { kind: 'Argument', name: { kind: 'Name', value: 'input' }, value: { kind: 'Variable', name: { kind: 'Name', value: 'input' } } } ], selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'FragmentSpread', name: { kind: 'Name', value: 'CartFragment' } } ] } } ] } }, { kind: 'FragmentDefinition', name: { kind: 'Name', value: 'ItemFragment' }, typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Item' } }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'name' } }, { kind: 'Field', name: { kind: 'Name', value: 'identifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'description' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'pricings' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'kind' } }, { kind: 'Field', name: { kind: 'Name', value: 'amount' } }, { kind: 'Field', name: { kind: 'Name', value: 'originalAmount' } }, { kind: 'Field', name: { kind: 'Name', value: 'isRecurring' } }, { kind: 'Field', name: { kind: 'Name', value: 'recurringInterval' } }, { kind: 'Field', name: { kind: 'Name', value: 'recurringIntervalUnit' } }, { kind: 'Field', name: { kind: 'Name', value: 'appleProductIdentifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'googleProductIdentifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } }, { kind: 'Field', name: { kind: 'Name', value: 'updatedAt' } } ] } } ] } }, { kind: 'FragmentDefinition', name: { kind: 'Name', value: 'CartFragment' }, typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'Order' } }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'status' } }, { kind: 'Field', name: { kind: 'Name', value: 'subtotal' } }, { kind: 'Field', name: { kind: 'Name', value: 'discount' } }, { kind: 'Field', name: { kind: 'Name', value: 'tax' } }, { kind: 'Field', name: { kind: 'Name', value: 'total' } }, { kind: 'Field', name: { kind: 'Name', value: 'gatewayMeta' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'orderItems' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'id' } }, { kind: 'Field', name: { kind: 'Name', value: 'quantity' } }, { kind: 'Field', name: { kind: 'Name', value: 'unitPrice' } }, { kind: 'Field', name: { kind: 'Name', value: 'subtotal' } }, { kind: 'Field', name: { kind: 'Name', value: 'discount' } }, { kind: 'Field', name: { kind: 'Name', value: 'tax' } }, { kind: 'Field', name: { kind: 'Name', value: 'total' } }, { kind: 'Field', name: { kind: 'Name', value: 'custom' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'item' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'FragmentSpread', name: { kind: 'Name', value: 'ItemFragment' } } ] } } ] } }, { kind: 'Field', name: { kind: 'Name', value: 'couponRedemptions' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'coupon' }, selectionSet: { kind: 'SelectionSet', selections: [ { kind: 'Field', name: { kind: 'Name', value: 'name' } }, { kind: 'Field', name: { kind: 'Name', value: 'identifier' } }, { kind: 'Field', name: { kind: 'Name', value: 'discountType' } }, { kind: 'Field', name: { kind: 'Name', value: 'discountAmount' } }, { kind: 'Field', name: { kind: 'Name', value: 'currencyCode' } }, { kind: 'Field', name: { kind: 'Name', value: 'expiresAt' } } ] } } ] } } ] } } ] } as unknown as DocumentNode<TransferCartMutation, TransferCartMutationVariables>

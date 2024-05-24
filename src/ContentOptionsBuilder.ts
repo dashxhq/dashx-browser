@@ -1,4 +1,4 @@
-import { parseFilterObject } from './utils'
+import parseFilterObject from './parseFilterObject'
 import type { SearchContentInput } from './generated'
 
 export type ContentOptions = Omit<SearchContentInput, 'returyType' | 'order'> & {

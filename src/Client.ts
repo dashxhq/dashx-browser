@@ -1,10 +1,11 @@
 import uuid from 'uuid-random'
-import { Client as UrqlClient, cacheExchange, fetchExchange } from '@urql/core'
+import { ApolloCache, ApolloClient, ApolloLink, HttpLink, InMemoryCache, NormalizedCacheObject, gql } from '@apollo/client'
+import { setContext } from '@apollo/client/link/context'
 
 import ContentOptionsBuilder from './ContentOptionsBuilder'
 import generateContext from './context'
+import parseFilterObject from './parseFilterObject'
 import { getItem, setItem } from './storage'
-import { parseFilterObject } from './utils'
 import {
   AddContentDocument,
   AddItemToCartDocument,
@@ -13,6 +14,7 @@ import {
   EditContentDocument,
   FetchCartDocument,
   FetchContactsDocument,
+  FetchContentDocument,
   FetchInAppNotificationsAggregateDocument,
   FetchInAppNotificationsDocument,
   FetchStoredPreferencesDocument,
@@ -27,34 +29,11 @@ import {
   TransferCartDocument,
 } from './generated'
 import type {
-  AddContentMutationVariables,
-  AddItemToCartMutationVariables,
-  ApplyCouponToCartMutationVariables,
-  AssetQueryVariables,
   ContactStubInput,
-  EditContentMutationVariables,
-  FetchCartQueryVariables,
-  FetchContactsQueryVariables,
-  FetchContentQueryVariables,
-  FetchInAppNotificationsAggregateQuery,
-  FetchInAppNotificationsAggregateQueryVariables,
   FetchInAppNotificationsQuery,
-  FetchInAppNotificationsQueryVariables,
-  FetchStoredPreferencesQueryVariables,
-  IdentifyAccountMutationVariables,
-  PrepareAssetMutationVariables,
-  RemoveCouponFromCartMutationVariables,
-  SaveContactsMutationVariables,
-  SaveStoredPreferencesMutationVariables,
-  SearchContentQueryVariables,
   SystemContextInput,
   TrackEventInput,
-  TrackEventMutation,
-  TrackEventMutationVariables,
   TrackNotificationInput,
-  TrackNotificationMutation,
-  TrackNotificationMutationVariables,
-  TransferCartMutationVariables,
 } from './generated'
 import type { ContentOptions, FetchContentOptions } from './ContentOptionsBuilder'
 
@@ -76,32 +55,28 @@ type UploadInputType = {
   attribute?: string,
 }
 
-interface SubscriptionSucceededData {
+type SubscriptionSucceededData = {
   channel: string,
 }
 
-interface InAppNotificationData {
-  body: string,
-  notificationId: string,
-}
+type InAppNotifications = FetchInAppNotificationsQuery['notifications']
 
-interface SubscribeData {
+type InAppNotificationData = Pick<FetchInAppNotificationsQuery['notifications'][0], 'id' | 'readAt' | 'renderedContent' | 'sentAt'>
+
+type SubscribeData = {
   accountUid: string,
 }
 
-enum WebsocketMessageType {
+enum WebsocketMessage {
   SUBSCRIBE = 'SUBSCRIBE',
   SUBSCRIPTION_SUCCEEDED = 'SUBSCRIPTION_SUCCEEDED',
   IN_APP_NOTIFICATION = 'IN_APP_NOTIFICATION',
 }
 
-type WebsocketMessage =
-  | { type: WebsocketMessageType.SUBSCRIBE, data: SubscribeData }
-  | { type: WebsocketMessageType.SUBSCRIPTION_SUCCEEDED, data: SubscriptionSucceededData }
-  | { type: WebsocketMessageType.IN_APP_NOTIFICATION, data: InAppNotificationData }
-
-type InAppNotifications = FetchInAppNotificationsQuery['notifications']
-type MarkNotificationResponse = TrackNotificationMutation
+type WebsocketMessageType =
+  | { type: WebsocketMessage.SUBSCRIBE, data: SubscribeData }
+  | { type: WebsocketMessage.SUBSCRIPTION_SUCCEEDED, data: SubscriptionSucceededData }
+  | { type: WebsocketMessage.IN_APP_NOTIFICATION, data: InAppNotificationData }
 
 type OptionalTimestampTrackNotificationInput = Omit<TrackNotificationInput, 'timestamp'> & { timestamp?: Pick<TrackNotificationInput, 'timestamp'> }
 
@@ -111,6 +86,8 @@ class Client {
   #accountUid: string | null = null
 
   #identityToken: string | null = null
+
+  graphqlClient!: ApolloClient<NormalizedCacheObject>
 
   targetEnvironment?: string
 
@@ -126,6 +103,7 @@ class Client {
     this.targetEnvironment = targetEnvironment
     this.context = generateContext()
     this.loadIdentity()
+    this.initGraphqlClient()
   }
 
   get accountAnonymousUid(): string | null {
@@ -169,15 +147,25 @@ class Client {
     setItem('identityToken', this.#identityToken)
   }
 
-  private graphqlClient(): UrqlClient {
-    return new UrqlClient({
-      url: this.baseUri,
-      exchanges: [ cacheExchange, fetchExchange ],
-      fetchOptions: {
-        headers: {
-          'X-Public-Key': this.publicKey,
-          ...(this.targetEnvironment ? { 'X-Target-Environment': this.targetEnvironment } : {}),
-          ...(this.#identityToken ? { 'X-Identity-Token': this.#identityToken } : {}),
+  private initGraphqlClient() {
+    const httpLink = new HttpLink({ uri: this.baseUri })
+
+    const authLink = setContext((_, { headers }) => ({
+      headers: {
+        ...headers,
+        'X-Public-Key': this.publicKey,
+        ...(this.targetEnvironment ? { 'X-Target-Environment': this.targetEnvironment } : {}),
+        ...(this.#identityToken ? { 'X-Identity-Token': this.#identityToken } : {}),
+      },
+    }))
+
+    this.graphqlClient = new ApolloClient({
+      link: ApolloLink.from([ authLink, httpLink ]),
+      cache: new InMemoryCache(),
+      connectToDevTools: true,
+      defaultOptions: {
+        watchQuery: {
+          fetchPolicy: 'cache-and-network',
         },
       },
     })
@@ -200,7 +188,7 @@ class Client {
 
     this.accountUid = options?.uid as string
 
-    const variables: IdentifyAccountMutationVariables = {
+    const variables = {
       input: {
         uid: options?.uid,
         anonymousUid: this.#accountAnonymousUid,
@@ -208,8 +196,7 @@ class Client {
       },
     }
 
-    return this.graphqlClient().query(IdentifyAccountDocument, variables)
-      .toPromise()
+    return this.graphqlClient.mutate({ mutation: IdentifyAccountDocument, variables })
       .then((response) => response.data)
       .catch((response) => response.errors)
   }
@@ -229,8 +216,8 @@ class Client {
     this.identityToken = null
   }
 
-  track(event: string, data?: Pick<TrackEventInput, 'data'>): Promise<TrackEventMutation> {
-    const variables: TrackEventMutationVariables = {
+  track(event: string, data?: Pick<TrackEventInput, 'data'>) {
+    const variables = {
       input: {
         event,
         data,
@@ -240,51 +227,196 @@ class Client {
       },
     }
 
-    return this.graphqlClient().mutation(TrackEventDocument, variables)
-      .toPromise()
-      .then((response) => response.data)
-      .catch((response) => response.errors)
+    return this.graphqlClient.mutate({ mutation: TrackEventDocument, variables })
   }
 
-  trackNotification(
-    { timestamp, ...other }: OptionalTimestampTrackNotificationInput,
-  ): Promise<TrackNotificationMutation> {
-    const variables: TrackNotificationMutationVariables = {
+  trackNotification({ id, status, timestamp }: OptionalTimestampTrackNotificationInput) {
+    const variables = {
       input: {
-        ...other,
+        id,
+        status,
         timestamp: timestamp || new Date(),
       },
     }
 
-    return this.graphqlClient().mutation(TrackNotificationDocument, variables)
-      .toPromise()
-      .then((response) => response.data)
-      .catch((response) => response.errors)
+    let update
+    if (status === 'READ' || status === 'UNREAD') {
+      if (!this.#accountUid) {
+        throw new Error(UNIDENTIFIED_USER_ERROR)
+      }
+
+      update = (cache: ApolloCache<InMemoryCache>) => {
+        cache.writeFragment({
+          data: {
+            id,
+            readAt: status === 'UNREAD' ? null : new Date(),
+            __typename: 'Notification',
+          },
+          fragment: gql`
+            fragment UpdateNotification on Notification {
+              id
+              readAt
+            }
+          `,
+        })
+
+        const fetchInAppNotificationsAggregateVariables = {
+          input: {
+            accountUid: this.#accountUid!,
+            filter: {
+              readAt: 'null',
+            },
+          },
+        }
+
+        const unreadNotificationsAggregate = cache.readQuery({
+          query: FetchInAppNotificationsAggregateDocument,
+          variables: fetchInAppNotificationsAggregateVariables,
+        })
+
+        let counter = 0
+        if (status === 'READ') {
+          counter = -1
+        } else if (status === 'UNREAD') {
+          counter = 1
+        }
+
+        cache.writeQuery({
+          query: FetchInAppNotificationsAggregateDocument,
+          data: {
+            notificationsAggregate: {
+              __typename: 'FetchInAppNotificationsAggregateResponse',
+              count: (unreadNotificationsAggregate?.notificationsAggregate.count || 0) + counter,
+            },
+          },
+          variables: fetchInAppNotificationsAggregateVariables,
+        })
+      }
+    }
+
+    return this.graphqlClient.mutate({
+      mutation: TrackNotificationDocument,
+      variables,
+      update,
+    })
   }
 
-  async fetchInAppNotifications(): Promise<FetchInAppNotificationsQuery> {
+  fetchInAppNotifications() {
     if (!this.#accountUid) {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
 
-    const variables: FetchInAppNotificationsQueryVariables = {
+    const fetchInAppNotificationsVariables = {
+      input: {
+        accountUid: this.#accountUid,
+      },
+    }
+    this.graphqlClient.query({
+      query: FetchInAppNotificationsDocument,
+      variables: fetchInAppNotificationsVariables,
+    })
+
+    const fetchInAppNotificationsAggregateVariables = {
+      input: {
+        ...fetchInAppNotificationsVariables.input,
+        filter: {
+          readAt: 'null',
+        },
+      },
+    }
+    this.graphqlClient.query({
+      query: FetchInAppNotificationsAggregateDocument,
+      variables: fetchInAppNotificationsAggregateVariables,
+    })
+  }
+
+  addInAppNotificationToCache(notification: InAppNotificationData): void {
+    if (!this.#accountUid) {
+      throw new Error(UNIDENTIFIED_USER_ERROR)
+    }
+
+    const fetchInAppNotificationsVariables = {
       input: {
         accountUid: this.#accountUid,
       },
     }
 
-    return this.graphqlClient().query(FetchInAppNotificationsDocument, variables)
-      .toPromise()
-      .then((response) => response.data)
-      .catch((response) => response.errors)
+    const existingNotifications = this.graphqlClient.readQuery({
+      query: FetchInAppNotificationsDocument,
+      variables: fetchInAppNotificationsVariables,
+    })
+
+    this.graphqlClient.writeQuery({
+      query: FetchInAppNotificationsDocument,
+      data: {
+        notifications: [
+          { ...notification, __typename: 'Notification' },
+          ...existingNotifications?.notifications || [],
+        ],
+      },
+      variables: fetchInAppNotificationsVariables,
+    })
+
+    const fetchInAppNotificationsAggregateVariables = {
+      input: {
+        ...fetchInAppNotificationsVariables.input,
+        filter: {
+          readAt: 'null',
+        },
+      },
+    }
+
+    const unreadNotificationsAggregate = this.graphqlClient.readQuery({
+      query: FetchInAppNotificationsAggregateDocument,
+      variables: fetchInAppNotificationsAggregateVariables,
+    })
+
+    this.graphqlClient.writeQuery({
+      query: FetchInAppNotificationsAggregateDocument,
+      data: {
+        notificationsAggregate: {
+          __typename: 'FetchInAppNotificationsAggregateResponse',
+          count: (unreadNotificationsAggregate?.notificationsAggregate.count || 0) + 1,
+        },
+      },
+      variables: fetchInAppNotificationsAggregateVariables,
+    })
   }
 
-  fetchUnreadInAppNotificationsCount(): Promise<FetchInAppNotificationsAggregateQuery> {
+  watchFetchInAppNotifications(callback: (data: InAppNotifications) => void): void {
     if (!this.#accountUid) {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
 
-    const variables: FetchInAppNotificationsAggregateQueryVariables = {
+    const variables = {
+      input: {
+        accountUid: this.#accountUid,
+      },
+    }
+
+    const observableQuery = this.graphqlClient.watchQuery({
+      query: FetchInAppNotificationsDocument,
+      variables,
+    })
+
+    observableQuery.subscribe({
+      next(response) {
+        callback(response.data.notifications)
+      },
+      error(err) {
+        // eslint-disable-next-line no-console
+        console.error(err)
+        callback([])
+      },
+    })
+  }
+
+  watchFetchInAppNotificationsAggregate(callback: (data: number) => void): void {
+    if (!this.#accountUid) {
+      throw new Error(UNIDENTIFIED_USER_ERROR)
+    }
+
+    const variables = {
       input: {
         accountUid: this.#accountUid,
         filter: {
@@ -293,10 +425,21 @@ class Client {
       },
     }
 
-    return this.graphqlClient().query(FetchInAppNotificationsAggregateDocument, variables)
-      .toPromise()
-      .then((response) => response.data)
-      .catch((response) => response.errors)
+    const observableQuery = this.graphqlClient.watchQuery({
+      query: FetchInAppNotificationsAggregateDocument,
+      variables,
+    })
+
+    observableQuery.subscribe({
+      next(response) {
+        callback(response.data.notificationsAggregate.count || 0)
+      },
+      error(err) {
+        // eslint-disable-next-line no-console
+        console.error(err)
+        callback(0)
+      },
+    })
   }
 
   addContent(urn: string, data: Record<string, any>): Promise<Response> {
@@ -309,12 +452,11 @@ class Client {
       contentType = urn
     }
 
-    const variables: AddContentMutationVariables = {
+    const variables = {
       input: { content, contentType, data },
     }
 
-    return this.graphqlClient().mutation(AddContentDocument, variables)
-      .toPromise()
+    return this.graphqlClient.mutate({ mutation: AddContentDocument, variables })
       .then((response) => response.data)
       .catch((response) => response.errors)
   }
@@ -329,12 +471,11 @@ class Client {
       contentType = urn
     }
 
-    const variables: EditContentMutationVariables = {
+    const variables = {
       input: { content: content!, contentType, data },
     }
 
-    return this.graphqlClient().mutation(EditContentDocument, variables)
-      .toPromise()
+    return this.graphqlClient.mutate({ mutation: EditContentDocument, variables })
       .then((response) => response.data)
       .catch((response) => response.errors)
   }
@@ -348,30 +489,26 @@ class Client {
     if (!options) {
       return new ContentOptionsBuilder(
         (wrappedOptions) => {
-          const variables: SearchContentQueryVariables = {
+          const variables = {
             input: {
               ...wrappedOptions,
               contentType,
             },
           }
 
-          return this.graphqlClient().query(SearchContentDocument, variables)
-            .toPromise()
+          return this.graphqlClient.query({ query: SearchContentDocument, variables })
             .then((response) => response.data?.searchContent)
-            .catch((response) => response.errors)
         },
       )
     }
 
     const filter = parseFilterObject(options.filter)
-    const variables: SearchContentQueryVariables = {
+    const variables = {
       input: { ...options, contentType, filter },
     }
 
-    const result = this.graphqlClient().query(SearchContentDocument, variables)
-      .toPromise()
+    const result = this.graphqlClient.query({ query: SearchContentDocument, variables })
       .then((response) => response.data?.searchContent)
-      .catch((response) => response.errors)
 
     if (options.returnType === 'all') {
       return result
@@ -386,11 +523,11 @@ class Client {
     }
 
     const [ contentType, content ] = urn.split('/')
-    const variables: FetchContentQueryVariables = {
+    const variables = {
       input: { content, contentType, ...options },
     }
 
-    const response = await this.graphqlClient().query(FetchContactsDocument, variables).toPromise()
+    const response = await this.graphqlClient.query({ query: FetchContentDocument, variables })
     return response.data?.fetchContent
   }
 
@@ -401,7 +538,7 @@ class Client {
     reset: boolean,
     custom?: Record<string, any>,
   }): Promise<any> {
-    const variables: AddItemToCartMutationVariables = {
+    const variables = {
       input: {
         custom,
         ...options,
@@ -410,13 +547,13 @@ class Client {
       },
     }
 
-    const response = await this.graphqlClient().mutation(AddItemToCartDocument, variables)
-      .toPromise()
+    const response = await this.graphqlClient
+      .mutate({ mutation: AddItemToCartDocument, variables })
     return response.data?.addItemToCart
   }
 
   async applyCouponToCart(options: { couponCode: string }): Promise<any> {
-    const variables: ApplyCouponToCartMutationVariables = {
+    const variables = {
       input: {
         ...options,
         accountUid: this.#accountUid,
@@ -424,13 +561,13 @@ class Client {
       },
     }
 
-    const response = await this.graphqlClient().mutation(ApplyCouponToCartDocument, variables)
-      .toPromise()
+    const response = await this.graphqlClient
+      .mutate({ mutation: ApplyCouponToCartDocument, variables })
     return response.data?.applyCouponToCart
   }
 
   async removeCouponFromCart(options: { couponCode: string }): Promise<any> {
-    const variables: RemoveCouponFromCartMutationVariables = {
+    const variables = {
       input: {
         ...options,
         accountUid: this.#accountUid,
@@ -438,13 +575,13 @@ class Client {
       },
     }
 
-    const response = await this.graphqlClient().mutation(RemoveCouponFromCartDocument, variables)
-      .toPromise()
+    const response = await this.graphqlClient
+      .mutate({ mutation: RemoveCouponFromCartDocument, variables })
     return response.data?.removeCouponFromCart
   }
 
   async fetchCart(options: { orderId?: string }): Promise<any> {
-    const variables: FetchCartQueryVariables = {
+    const variables = {
       input: {
         ...options,
         accountUid: this.#accountUid,
@@ -452,8 +589,7 @@ class Client {
       },
     }
 
-    const response = await this.graphqlClient().query(FetchCartDocument, variables)
-      .toPromise()
+    const response = await this.graphqlClient.query({ query: FetchCartDocument, variables })
     return response.data?.fetchCart
   }
 
@@ -462,7 +598,7 @@ class Client {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
 
-    const variables: TransferCartMutationVariables = {
+    const variables = {
       input: {
         ...options,
         accountUid: this.#accountUid,
@@ -470,8 +606,8 @@ class Client {
       },
     }
 
-    const response = await this.graphqlClient().mutation(TransferCartDocument, variables)
-      .toPromise()
+    const response = await this.graphqlClient
+      .mutate({ mutation: TransferCartDocument, variables })
     return response.data?.transferCart
   }
 
@@ -480,14 +616,14 @@ class Client {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
 
-    const variables: FetchStoredPreferencesQueryVariables = {
+    const variables = {
       input: {
         accountUid: this.#accountUid,
       },
     }
 
-    const response = await this.graphqlClient().query(FetchStoredPreferencesDocument, variables)
-      .toPromise()
+    const response = await this.graphqlClient
+      .query({ query: FetchStoredPreferencesDocument, variables })
     return response.data?.fetchStoredPreferences.preferenceData
   }
 
@@ -496,16 +632,16 @@ class Client {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
 
-    const variables: SaveStoredPreferencesMutationVariables = {
+    const variables = {
       input: {
         accountUid: this.#accountUid,
         preferenceData,
       },
     }
 
-    const response = await this.graphqlClient().mutation(SaveStoredPreferencesDocument, variables)
-      .toPromise()
-    return response?.data.saveStoredPreferences
+    const response = await this.graphqlClient
+      .mutate({ mutation: SaveStoredPreferencesDocument, variables })
+    return response?.data?.saveStoredPreferences
   }
 
   async fetchContacts(): Promise<any> {
@@ -513,12 +649,11 @@ class Client {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
 
-    const variables: FetchContactsQueryVariables = {
+    const variables = {
       input: { uid: this.#accountUid },
     }
 
-    const response = await this.graphqlClient().query(FetchContactsDocument, variables)
-      .toPromise()
+    const response = await this.graphqlClient.query({ query: FetchContactsDocument, variables })
     return response?.data?.fetchContacts?.contacts
   }
 
@@ -527,21 +662,21 @@ class Client {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
 
-    const variables: SaveContactsMutationVariables = {
+    const variables = {
       input: {
         uid: this.#accountUid,
         contacts,
       },
     }
 
-    const response = await this.graphqlClient().mutation(SaveContactsDocument, variables)
-      .toPromise()
+    const response = await this.graphqlClient
+      .mutate({ mutation: SaveContactsDocument, variables })
     return response?.data?.saveContacts
   }
 
   async upload(options: UploadInputType) {
     const { file, attribute, resource } = options
-    const variables: PrepareAssetMutationVariables = {
+    const variables = {
       input: {
         name: file.name,
         size: file.size,
@@ -552,8 +687,8 @@ class Client {
       },
     }
 
-    const response = await this.graphqlClient().mutation(PrepareAssetDocument, variables)
-      .toPromise()
+    const response = await this.graphqlClient
+      .mutate({ mutation: PrepareAssetDocument, variables })
 
     const id = response?.data?.prepareAsset?.id
     const url = response?.data?.prepareAsset?.data?.upload?.url
@@ -595,14 +730,13 @@ class Client {
   async getAsset(options: { id: string }) {
     const { id } = options
 
-    const variables: AssetQueryVariables = { id }
-    const response = await this.graphqlClient().query(AssetDocument, variables)
-      .toPromise()
+    const variables = { id }
+    const response = await this.graphqlClient.query({ query: AssetDocument, variables })
 
     return response?.data?.asset
   }
 }
 
 export default Client
-export { WebsocketMessageType }
-export type { ClientParams, InAppNotifications, MarkNotificationResponse, WebsocketMessage }
+export { WebsocketMessage }
+export type { ClientParams, InAppNotifications, WebsocketMessageType }
