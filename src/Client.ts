@@ -44,6 +44,7 @@ const UNIDENTIFIED_USER_ERROR = 'This operation can be performed only by an iden
 type ClientParams = {
   publicKey: string,
   baseUri?: string,
+  realtimeBaseUri?: string,
   targetEnvironment?: string,
 }
 
@@ -97,8 +98,16 @@ class Client {
 
   baseUri: string
 
-  constructor({ publicKey, baseUri = 'https://api.dashx.com/graphql', targetEnvironment }: ClientParams) {
+  realtimeBaseUri: string
+
+  constructor({
+    publicKey,
+    baseUri = 'https://api.dashx.com/graphql',
+    realtimeBaseUri = 'wss://realtime.dashx.com',
+    targetEnvironment,
+  }: ClientParams) {
     this.baseUri = baseUri
+    this.realtimeBaseUri = realtimeBaseUri
     this.publicKey = publicKey
     this.targetEnvironment = targetEnvironment
     this.context = generateContext()
