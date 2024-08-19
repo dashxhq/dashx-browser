@@ -3,6 +3,7 @@ import { ApolloCache, ApolloClient, ApolloLink, HttpLink, InMemoryCache, Normali
 import { setContext } from '@apollo/client/link/context'
 
 import ContentOptionsBuilder from './ContentOptionsBuilder'
+import SearchRecordsInputBuilder, { SearchRecordsOptions } from './SearchRecordsInputBuilder'
 import generateContext from './context'
 import parseFilterObject from './parseFilterObject'
 import { getItem, setItem } from './storage'
@@ -24,6 +25,7 @@ import {
   SaveContactsDocument,
   SaveStoredPreferencesDocument,
   SearchContentDocument,
+  SearchRecordsDocument,
   TrackEventDocument,
   TrackNotificationDocument,
   TransferCartDocument,
@@ -187,22 +189,29 @@ class Client {
   }
 
   identify(): Promise<Response>
-  identify(uid: string): void
+  identify(uid: string): Promise<Response>
   identify(options: IdentifyParams): Promise<Response>
   identify(options?: string | IdentifyParams): Promise<any> | void {
+    let variables = { input: {} }
+
     if (typeof options === 'string') {
       this.accountUid = options
-      return undefined
-    }
 
-    this.accountUid = options?.uid as string
+      variables = {
+        input: {
+          uid: options,
+        },
+      }
+    } else {
+      this.accountUid = options?.uid as string
 
-    const variables = {
-      input: {
-        uid: options?.uid,
-        anonymousUid: this.#accountAnonymousUid,
-        ...options,
-      },
+      variables = {
+        input: {
+          uid: options?.uid,
+          anonymousUid: this.#accountAnonymousUid,
+          ...options,
+        },
+      }
     }
 
     return this.graphqlClient.mutate({ mutation: IdentifyAccountDocument, variables })
@@ -538,6 +547,44 @@ class Client {
 
     const response = await this.graphqlClient.query({ query: FetchContentDocument, variables })
     return response.data?.fetchContent
+  }
+
+  searchRecords(resource: string): SearchRecordsInputBuilder
+  searchRecords(resource: string, options: SearchRecordsOptions): Promise<any>
+  searchRecords(
+    resource: string,
+    options?: SearchRecordsOptions,
+  ): SearchRecordsInputBuilder | Promise<any> {
+    if (!options) {
+      return new SearchRecordsInputBuilder(
+        resource,
+        async (wrappedOptions) => {
+          const variables = {
+            input: {
+              ...wrappedOptions,
+              resource,
+            },
+          }
+
+          const response = await this.graphqlClient.query({
+            query: SearchRecordsDocument,
+            variables,
+          })
+
+          return response.data?.searchRecords
+        },
+      )
+    }
+
+    const filter = parseFilterObject(options.filter)
+    const variables = {
+      input: { ...options, resource, filter },
+    }
+
+    const result = this.graphqlClient.query({ query: SearchRecordsDocument, variables })
+      .then((response) => response.data?.searchRecords)
+
+    return result
   }
 
   async addItemToCart({ custom = {}, ...options }: {
