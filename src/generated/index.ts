@@ -202,16 +202,16 @@ export type SearchContentInput = {
 }
 
 export type SearchRecordsInput = {
-  resource: Scalars['String']['input'],
+  exclude?: InputMaybe<Array<Scalars['JSON']['input']>>,
+  fields?: InputMaybe<Array<Scalars['JSON']['input']>>,
   filter?: InputMaybe<Scalars['JSON']['input']>,
-  order?: InputMaybe<Scalars['JSON']['input']>,
+  include?: InputMaybe<Array<Scalars['JSON']['input']>>,
+  language?: InputMaybe<Scalars['String']['input']>,
   limit?: InputMaybe<Scalars['Int']['input']>,
+  order?: InputMaybe<Scalars['JSON']['input']>,
   page?: InputMaybe<Scalars['Int']['input']>,
   preview?: InputMaybe<Scalars['Boolean']['input']>,
-  language?: InputMaybe<Scalars['String']['input']>,
-  fields?: InputMaybe<Array<Scalars['String']['input']>>,
-  include?: InputMaybe<Array<Scalars['String']['input']>>,
-  exclude?: InputMaybe<Array<Scalars['String']['input']>>,
+  resource: Scalars['String']['input'],
 }
 
 export type SystemContextAppInput = {
