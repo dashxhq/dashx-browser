@@ -2,20 +2,16 @@ import uuid from 'uuid-random'
 import { ApolloCache, ApolloClient, ApolloLink, HttpLink, InMemoryCache, NormalizedCacheObject, gql } from '@apollo/client'
 import { setContext } from '@apollo/client/link/context'
 
-import ContentOptionsBuilder from './ContentOptionsBuilder'
 import SearchRecordsInputBuilder, { FetchRecordsOptions, SearchRecordsOptions } from './SearchRecordsInputBuilder'
 import generateContext from './context'
 import parseFilterObject from './parseFilterObject'
 import { getItem, setItem } from './storage'
 import {
-  AddContentDocument,
   AddItemToCartDocument,
   ApplyCouponToCartDocument,
   AssetDocument,
-  EditContentDocument,
   FetchCartDocument,
   FetchContactsDocument,
-  FetchContentDocument,
   FetchInAppNotificationsAggregateDocument,
   FetchInAppNotificationsDocument,
   FetchRecordDocument,
@@ -25,7 +21,6 @@ import {
   RemoveCouponFromCartDocument,
   SaveContactsDocument,
   SaveStoredPreferencesDocument,
-  SearchContentDocument,
   SearchRecordsDocument,
   TrackEventDocument,
   TrackNotificationDocument,
@@ -38,7 +33,6 @@ import type {
   TrackEventInput,
   TrackNotificationInput,
 } from './generated'
-import type { ContentOptions, FetchContentOptions } from './ContentOptionsBuilder'
 
 const UPLOAD_RETRY_LIMIT = 5
 const UPLOAD_RETRY_TIMEOUT = 3000
@@ -459,95 +453,6 @@ class Client {
         callback(0)
       },
     })
-  }
-
-  addContent(urn: string, data: Record<string, any>): Promise<Response> {
-    let content; let
-      contentType
-
-    if (urn.includes('/')) {
-      [ contentType, content ] = urn.split('/')
-    } else {
-      contentType = urn
-    }
-
-    const variables = {
-      input: { content, contentType, data },
-    }
-
-    return this.graphqlClient.mutate({ mutation: AddContentDocument, variables })
-      .then((response) => response.data)
-      .catch((response) => response.errors)
-  }
-
-  editContent(urn: string, data: Record<string, any>): Promise<Response> {
-    let content; let
-      contentType
-
-    if (urn.includes('/')) {
-      [ contentType, content ] = urn.split('/')
-    } else {
-      contentType = urn
-    }
-
-    const variables = {
-      input: { content: content!, contentType, data },
-    }
-
-    return this.graphqlClient.mutate({ mutation: EditContentDocument, variables })
-      .then((response) => response.data)
-      .catch((response) => response.errors)
-  }
-
-  searchContent(contentType: string): ContentOptionsBuilder
-  searchContent(contentType: string, options: ContentOptions): Promise<any>
-  searchContent(
-    contentType: string,
-    options?: ContentOptions,
-  ): ContentOptionsBuilder | Promise<any> {
-    if (!options) {
-      return new ContentOptionsBuilder(
-        (wrappedOptions) => {
-          const variables = {
-            input: {
-              ...wrappedOptions,
-              contentType,
-            },
-          }
-
-          return this.graphqlClient.query({ query: SearchContentDocument, variables })
-            .then((response) => response.data?.searchContent)
-        },
-      )
-    }
-
-    const filter = parseFilterObject(options.filter)
-    const variables = {
-      input: { ...options, contentType, filter },
-    }
-
-    const result = this.graphqlClient.query({ query: SearchContentDocument, variables })
-      .then((response) => response.data?.searchContent)
-
-    if (options.returnType === 'all') {
-      return result
-    }
-
-    return result.then((data) => (Array.isArray(data) ? data[0] : null))
-  }
-
-  async fetchContent(urn: string, options: FetchContentOptions): Promise<any> {
-    if (!urn.includes('/')) {
-      throw new Error('URN must be of form: {contentType}/{content}')
-    }
-
-    const [ contentType, content ] = urn.split('/')
-    const variables = {
-      input: { content, contentType, ...options },
-    }
-
-    const response = await this.graphqlClient.query({ query: FetchContentDocument, variables })
-    return response.data?.fetchContent
   }
 
   searchRecords(resource: string): SearchRecordsInputBuilder
