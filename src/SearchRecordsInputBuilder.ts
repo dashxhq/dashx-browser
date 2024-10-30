@@ -1,9 +1,11 @@
 import parseFilterObject from './parseFilterObject'
-import type { SearchRecordsInput } from './generated'
+import type { FetchRecordInput, SearchRecordsInput } from './generated'
 
 export type SearchRecordsOptions = Omit<SearchRecordsInput, 'resource' | 'order'> & {
   order?: Record<string, 'ASC' | 'DESC'>,
 }
+
+export type FetchRecordsOptions = Omit<FetchRecordInput, 'resource' | 'recordId'>
 
 class SearchRecordsInputBuilder {
   private options: SearchRecordsOptions

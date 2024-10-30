@@ -3,7 +3,7 @@ import { ApolloCache, ApolloClient, ApolloLink, HttpLink, InMemoryCache, Normali
 import { setContext } from '@apollo/client/link/context'
 
 import ContentOptionsBuilder from './ContentOptionsBuilder'
-import SearchRecordsInputBuilder, { SearchRecordsOptions } from './SearchRecordsInputBuilder'
+import SearchRecordsInputBuilder, { FetchRecordsOptions, SearchRecordsOptions } from './SearchRecordsInputBuilder'
 import generateContext from './context'
 import parseFilterObject from './parseFilterObject'
 import { getItem, setItem } from './storage'
@@ -18,6 +18,7 @@ import {
   FetchContentDocument,
   FetchInAppNotificationsAggregateDocument,
   FetchInAppNotificationsDocument,
+  FetchRecordDocument,
   FetchStoredPreferencesDocument,
   IdentifyAccountDocument,
   PrepareAssetDocument,
@@ -585,6 +586,20 @@ class Client {
       .then((response) => response.data?.searchRecords)
 
     return result
+  }
+
+  async fetchRecord(urn: string, options: FetchRecordsOptions): Promise<any> {
+    if (!urn.includes('/')) {
+      throw new Error('URN must be of form: {contentType}/{content}')
+    }
+
+    const [ resource, recordId ] = urn.split('/')
+    const variables = {
+      input: { resource, recordId, ...options },
+    }
+
+    const response = await this.graphqlClient.query({ query: FetchRecordDocument, variables })
+    return response.data?.fetchRecord
   }
 
   async addItemToCart({ custom = {}, ...options }: {
