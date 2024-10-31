@@ -2,7 +2,7 @@ import parseFilterObject from './parseFilterObject'
 import type { SearchContentInput } from './generated'
 
 export type ContentOptions = Omit<SearchContentInput, 'returnType' | 'order'> & {
-  returnType?: 'all' | 'one',
+  returnType: 'all' | 'one',
   order?: Record<string, 'ASC' | 'DESC'>,
 }
 
