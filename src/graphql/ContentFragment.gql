@@ -1,8 +1,0 @@
-fragment ContentFragment on CustomContent {
-  id
-  identifier
-  position
-  data
-  createdAt
-  updatedAt
-}
