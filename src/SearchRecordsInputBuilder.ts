@@ -1,4 +1,3 @@
-import parseFilterObject from './parseFilterObject'
 import type { FetchRecordInput, SearchRecordsInput } from './generated'
 
 export type SearchRecordsOptions = Omit<SearchRecordsInput, 'resource' | 'order'> & {
@@ -27,7 +26,7 @@ class SearchRecordsInputBuilder {
   }
 
   filter(by: SearchRecordsOptions['filter']) {
-    this.options.filter = parseFilterObject(by)
+    this.options.filter = by || {}
     return this
   }
 

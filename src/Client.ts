@@ -4,7 +4,6 @@ import { setContext } from '@apollo/client/link/context'
 
 import SearchRecordsInputBuilder, { FetchRecordsOptions, SearchRecordsOptions } from './SearchRecordsInputBuilder'
 import generateContext from './context'
-import parseFilterObject from './parseFilterObject'
 import { getItem, setItem } from './storage'
 import {
   AddItemToCartDocument,
@@ -482,9 +481,8 @@ class Client {
       )
     }
 
-    const filter = parseFilterObject(options.filter)
     const variables = {
-      input: { ...options, resource, filter },
+      input: { ...options, resource },
     }
 
     const result = this.graphqlClient.query({ query: SearchRecordsDocument, variables })
