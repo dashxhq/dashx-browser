@@ -38,10 +38,10 @@ const UPLOAD_RETRY_TIMEOUT = 3000
 const UNIDENTIFIED_USER_ERROR = 'This operation can be performed only by an identified user. Ensure `dashx.identify` is run before calling this method.'
 
 type ClientParams = {
-  publicKey: string,
   baseUri?: string,
   realtimeBaseUri?: string,
-  targetEnvironment?: string,
+  publicKey: string,
+  targetEnvironment: string,
 }
 
 type IdentifyParams = Record<string, any>
@@ -86,15 +86,15 @@ class Client {
 
   graphqlClient!: ApolloClient<NormalizedCacheObject>
 
-  targetEnvironment?: string
-
-  context: SystemContextInput
-
-  publicKey: string
-
   baseUri: string
 
   realtimeBaseUri: string
+
+  publicKey: string
+
+  targetEnvironment: string
+
+  context: SystemContextInput
 
   constructor({
     publicKey,
@@ -159,7 +159,7 @@ class Client {
       headers: {
         ...headers,
         'X-Public-Key': this.publicKey,
-        ...(this.targetEnvironment ? { 'X-Target-Environment': this.targetEnvironment } : {}),
+        'X-Target-Environment': this.targetEnvironment,
         ...(this.#identityToken ? { 'X-Identity-Token': this.#identityToken } : {}),
       },
     }))

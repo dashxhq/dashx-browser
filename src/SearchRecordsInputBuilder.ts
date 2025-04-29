@@ -1,7 +1,7 @@
 import type { FetchRecordInput, SearchRecordsInput } from './generated'
 
 export type SearchRecordsOptions = Omit<SearchRecordsInput, 'resource' | 'order'> & {
-  order?: Record<string, 'ASC' | 'DESC'>,
+  order?: Record<string, 'ASC' | 'DESC'>[],
 }
 
 export type FetchRecordsOptions = Omit<FetchRecordInput, 'resource' | 'recordId'>
