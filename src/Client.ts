@@ -38,6 +38,13 @@ const UPLOAD_RETRY_LIMIT = 5
 const UPLOAD_RETRY_TIMEOUT = 3000
 const UNIDENTIFIED_USER_ERROR = 'This operation can be performed only by an identified user. Ensure `dashx.identify` is run before calling this method.'
 
+// DashX WebSocket close codes
+const DASHX_CLOSE_CODES = [
+  40000, // Bad request
+  40001, // Unauthorized
+  50000  // Internal server error
+] as const
+
 type ClientParams = {
   baseUri?: string,
   realtimeBaseUri?: string,
@@ -829,5 +836,5 @@ class Client {
 }
 
 export default Client
-export { WebsocketMessage }
+export { WebsocketMessage, DASHX_CLOSE_CODES }
 export type { ClientParams, InAppNotifications, WebsocketMessageType }
