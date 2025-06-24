@@ -4,6 +4,7 @@ import { setContext } from '@apollo/client/link/context'
 
 import SearchRecordsInputBuilder, { FetchRecordsOptions, SearchRecordsOptions } from './SearchRecordsInputBuilder'
 import generateContext from './context'
+import WebSocketManager from './WebSocketManager'
 import { getItem, setItem } from './storage'
 import {
   AddItemToCartDocument,
@@ -83,6 +84,8 @@ class Client {
   #accountUid: string | null = null
 
   #identityToken: string | null = null
+
+  #websocketManager: WebSocketManager | null = null
 
   graphqlClient!: ApolloClient<NormalizedCacheObject>
 
@@ -708,6 +711,120 @@ class Client {
     const response = await this.graphqlClient.query({ query: AssetDocument, variables })
 
     return response?.data?.asset
+  }
+
+  // WebSocket methods for real-time functionality
+  connectWebSocket(): void {
+    if (!this.#accountUid) {
+      throw new Error(UNIDENTIFIED_USER_ERROR)
+    }
+
+    if (this.#websocketManager?.isConnected) {
+      return
+    }
+
+    this.#websocketManager = this.createWebSocketConnection()
+    this.#websocketManager.connect()
+  }
+
+  disconnectWebSocket(): void {
+    this.#websocketManager?.disconnect()
+    this.#websocketManager = null
+  }
+
+  get isWebSocketConnected(): boolean {
+    return this.#websocketManager?.isConnected ?? false
+  }
+
+  // Flexible WebSocket connection method for different frameworks
+  createWebSocketConnection(options?: {
+    onMessage?: (message: WebsocketMessageType) => void
+    onOpen?: () => void
+    onClose?: (event: CloseEvent) => void
+    onError?: (error: Event) => void
+    onReconnect?: (attempt: number) => void
+    onReconnectFailed?: () => void
+    queryParams?: Record<string, string>
+    shouldReconnect?: (closeEvent: CloseEvent) => boolean
+  }): WebSocketManager {
+    if (!this.#accountUid) {
+      throw new Error(UNIDENTIFIED_USER_ERROR)
+    }
+
+    // Build URL with query parameters
+    let url = this.realtimeBaseUri
+    if (options?.queryParams) {
+      const params = new URLSearchParams()
+      Object.entries(options.queryParams).forEach(([key, value]) => {
+        params.append(key, value)
+      })
+      url += `?${params.toString()}`
+    }
+
+    const wsManager = new WebSocketManager({
+      url,
+      onOpen: () => {
+        // Automatically subscribe to notifications
+        this.subscribeToNotifications(wsManager)
+        options?.onOpen?.()
+      },
+      onMessage: (event: MessageEvent) => {
+        try {
+          const message: WebsocketMessageType = JSON.parse(event.data)
+          this.handleWebSocketMessage(message)
+          options?.onMessage?.(message)
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error)
+        }
+      },
+      onClose: (event: CloseEvent) => {
+        options?.onClose?.(event)
+      },
+      onError: (error) => {
+        console.error('WebSocket error:', error)
+        options?.onError?.(error)
+      },
+      onReconnect: (attempt) => {
+        console.log(`WebSocket reconnecting... attempt ${attempt}`)
+        options?.onReconnect?.(attempt)
+      },
+      onReconnectFailed: () => {
+        console.error('WebSocket reconnection failed')
+        options?.onReconnectFailed?.()
+      },
+      shouldReconnect: options?.shouldReconnect,
+    })
+
+    return wsManager
+  }
+
+  private subscribeToNotifications(wsManager?: WebSocketManager): void {
+    const manager = wsManager || this.#websocketManager
+    if (!manager || !this.#accountUid) return
+
+    const subscribeMessage: WebsocketMessageType = {
+      type: WebsocketMessage.SUBSCRIBE,
+      data: {
+        accountUid: this.#accountUid,
+      },
+    }
+
+    manager.send(subscribeMessage)
+  }
+
+  private handleWebSocketMessage(message: WebsocketMessageType): void {
+    switch (message.type) {
+      case WebsocketMessage.SUBSCRIPTION_SUCCEEDED:
+        console.log('Successfully subscribed to notifications')
+        break
+
+      case WebsocketMessage.IN_APP_NOTIFICATION:
+        this.addInAppNotificationToCache(message.data)
+        break
+
+      default:
+        console.warn('Unknown WebSocket message type:', message.type)
+    }
   }
 }
 
