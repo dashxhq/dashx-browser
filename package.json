@@ -3,6 +3,7 @@
   "title": "dashx-browser",
   "version": "0.3.2",
   "description": "DashX SDK for Browser",
+  "type": "module",
   "files": [
     "dist"
   ],
@@ -41,7 +42,7 @@
   "devDependencies": {
     "@graphql-codegen/add": "^5.0.3",
     "@graphql-codegen/cli": "^5.0.7",
-    "@graphql-codegen/typed-document-node": "^5.1.1",
+    "@graphql-codegen/typed-document-node": "^5.1.2",
     "@types/node": "^24.0.4",
     "@typescript-eslint/eslint-plugin": "^8.35.0",
     "@typescript-eslint/parser": "^8.35.0",
