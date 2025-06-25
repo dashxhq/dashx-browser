@@ -42,7 +42,7 @@
     "@graphql-codegen/add": "^5.0.3",
     "@graphql-codegen/cli": "^5.0.7",
     "@graphql-codegen/typed-document-node": "^5.1.1",
-    "@types/node": "^24.0.3",
+    "@types/node": "^24.0.4",
     "@typescript-eslint/eslint-plugin": "^8.35.0",
     "@typescript-eslint/parser": "^8.35.0",
     "dotenv": "^16.5.0",
@@ -52,7 +52,7 @@
     "eslint-plugin-import": "^2.32.0",
     "graphql-codegen-typescript-operation-types": "^2.0.2",
     "typescript": "^5.8.3",
-    "vite": "^6.3.5",
+    "vite": "^7.0.0",
     "vite-plugin-dts": "^4.5.4"
   }
 }
