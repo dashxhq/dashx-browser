@@ -72,11 +72,13 @@ type SubscribeData = {
   accountUid: string,
 }
 
+/* eslint-disable no-unused-vars */
 enum WebsocketMessage {
   SUBSCRIBE = 'SUBSCRIBE',
   SUBSCRIPTION_SUCCEEDED = 'SUBSCRIPTION_SUCCEEDED',
   IN_APP_NOTIFICATION = 'IN_APP_NOTIFICATION',
 }
+/* eslint-enable no-unused-vars */
 
 type WebsocketMessageType =
   | { type: WebsocketMessage.SUBSCRIBE, data: SubscribeData }
@@ -192,9 +194,8 @@ class Client {
     this.identityToken = getItem('identityToken') || null
   }
 
-  identify(): Promise<Response>
-  identify(uid: string): Promise<Response>
-  identify(options: IdentifyParams): Promise<Response>
+  identify(_uid: string): Promise<Response>
+  identify(_options: IdentifyParams): Promise<Response>
   identify(options?: string | IdentifyParams): Promise<any> | void {
     let variables = { input: {} }
 
@@ -405,7 +406,7 @@ class Client {
     })
   }
 
-  watchFetchInAppNotifications(callback: (data: InAppNotifications) => void): void {
+  watchFetchInAppNotifications(callback: (_data: InAppNotifications) => void): void {
     if (!this.#accountUid) {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
@@ -422,18 +423,17 @@ class Client {
     })
 
     observableQuery.subscribe({
-      next(response) {
-        callback(response.data.notifications)
+      next(_response) {
+        callback(_response.data.notifications)
       },
-      error(err) {
-        // eslint-disable-next-line no-console
-        console.error(err)
+      error(_err) {
+        console.error(_err)
         callback([])
       },
     })
   }
 
-  watchFetchInAppNotificationsAggregate(callback: (data: number) => void): void {
+  watchFetchInAppNotificationsAggregate(callback: (_data: number) => void): void {
     if (!this.#accountUid) {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
@@ -453,31 +453,27 @@ class Client {
     })
 
     observableQuery.subscribe({
-      next(response) {
-        callback(response.data.notificationsAggregate.count || 0)
+      next(_response) {
+        callback(_response.data.notificationsAggregate.count || 0)
       },
-      error(err) {
-        // eslint-disable-next-line no-console
-        console.error(err)
+      error(_err) {
+        console.error(_err)
         callback(0)
       },
     })
   }
 
-  searchRecords(resource: string): SearchRecordsInputBuilder
-  searchRecords(resource: string, options: SearchRecordsOptions): Promise<any>
-  searchRecords(
-    resource: string,
-    options?: SearchRecordsOptions,
-  ): SearchRecordsInputBuilder | Promise<any> {
-    if (!options) {
+  searchRecords(_resource: string): SearchRecordsInputBuilder
+  searchRecords(_resource: string, _options: SearchRecordsOptions): Promise<any>
+  searchRecords(_resource: string, _options?: SearchRecordsOptions): SearchRecordsInputBuilder | Promise<any> {
+    if (!_options) {
       return new SearchRecordsInputBuilder(
-        resource,
-        async (wrappedOptions) => {
+        _resource,
+        async (_wrappedOptions) => {
           const variables = {
             input: {
-              ...wrappedOptions,
-              resource,
+              ..._wrappedOptions,
+              resource: _resource,
             },
           }
 
@@ -492,7 +488,7 @@ class Client {
     }
 
     const variables = {
-      input: { ...options, resource },
+      input: { ..._options, resource: _resource },
     }
 
     const result = this.graphqlClient.query({ query: SearchRecordsDocument, variables })
@@ -745,14 +741,14 @@ class Client {
 
   // Flexible WebSocket connection method for different frameworks
   createWebSocketConnection(options?: {
-    onMessage?: (message: WebsocketMessageType) => void
+    onMessage?: (_message: WebsocketMessageType) => void
     onOpen?: () => void
-    onClose?: (event: CloseEvent) => void
-    onError?: (error: Event) => void
-    onReconnect?: (attempt: number) => void
+    onClose?: (_event: CloseEvent) => void
+    onError?: (_error: Event) => void
+    onReconnect?: (_attempt: number) => void
     onReconnectFailed?: () => void
     queryParams?: Record<string, string>
-    shouldReconnect?: (closeEvent: CloseEvent) => boolean
+    shouldReconnect?: (_closeEvent: CloseEvent) => boolean
   }): WebSocketManager {
     if (!this.#accountUid) {
       throw new Error(UNIDENTIFIED_USER_ERROR)
@@ -762,7 +758,7 @@ class Client {
     let url = this.realtimeBaseUri
     if (options?.queryParams) {
       const params = new URLSearchParams()
-      Object.entries(options.queryParams).forEach(([key, value]) => {
+      Object.entries(options.queryParams).forEach(([ key, value ]) => {
         params.append(key, value)
       })
       url += `?${params.toString()}`
@@ -819,18 +815,18 @@ class Client {
     manager.send(subscribeMessage)
   }
 
-  private handleWebSocketMessage(message: WebsocketMessageType): void {
-    switch (message.type) {
+  private handleWebSocketMessage(_message: WebsocketMessageType): void {
+    switch (_message.type) {
       case WebsocketMessage.SUBSCRIPTION_SUCCEEDED:
         console.log('Successfully subscribed to notifications')
         break
 
       case WebsocketMessage.IN_APP_NOTIFICATION:
-        this.addInAppNotificationToCache(message.data)
+        this.addInAppNotificationToCache(_message.data)
         break
 
       default:
-        console.warn('Unknown WebSocket message type:', message.type)
+        console.warn('Unknown WebSocket message type:', _message.type)
     }
   }
 }

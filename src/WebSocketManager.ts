@@ -7,12 +7,12 @@ export interface WebSocketOptions {
   maxReconnectAttempts?: number
   heartbeatInterval?: number
   heartbeatMessage?: string
-  shouldReconnect?: (closeEvent: CloseEvent) => boolean
-  onOpen?: (event: Event) => void
-  onClose?: (event: CloseEvent) => void
-  onError?: (event: Event) => void
-  onMessage?: (event: MessageEvent) => void
-  onReconnect?: (attempt: number) => void
+  shouldReconnect?: (_closeEvent: CloseEvent) => boolean
+  onOpen?: (_event: Event) => void
+  onClose?: (_event: CloseEvent) => void
+  onError?: (_event: Event) => void
+  onMessage?: (_event: MessageEvent) => void
+  onReconnect?: (_attempt: number) => void
   onReconnectFailed?: () => void
 }
 
@@ -100,36 +100,36 @@ export class WebSocketManager {
   private setupEventHandlers(): void {
     if (!this.ws) return
 
-    this.ws.onopen = (event: Event) => {
+    this.ws.onopen = (_event: Event) => {
       this.isConnecting = false
       this.reconnectAttempts = 0
       this.startHeartbeat()
-      this.options.onOpen(event)
+      this.options.onOpen(_event)
     }
 
-    this.ws.onclose = (event: CloseEvent) => {
+    this.ws.onclose = (_event: CloseEvent) => {
       this.isConnecting = false
       this.stopHeartbeat()
-      this.options.onClose(event)
-      this.lastCloseEvent = event
+      this.options.onClose(_event)
+      this.lastCloseEvent = _event
 
-      if (this.shouldReconnect && !event.wasClean) {
+      if (this.shouldReconnect && !_event.wasClean) {
         this.scheduleReconnect()
       }
     }
 
-    this.ws.onerror = (event: Event) => {
+    this.ws.onerror = (_event: Event) => {
       this.isConnecting = false
-      this.options.onError(event)
+      this.options.onError(_event)
     }
 
-    this.ws.onmessage = (event: MessageEvent) => {
+    this.ws.onmessage = (_event: MessageEvent) => {
       // Handle heartbeat responses
-      if (event.data === 'pong' || event.data === this.options.heartbeatMessage) {
+      if (_event.data === 'pong' || _event.data === this.options.heartbeatMessage) {
         return
       }
 
-      this.options.onMessage(event)
+      this.options.onMessage(_event)
     }
   }
 
