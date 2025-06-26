@@ -50,6 +50,7 @@ type ClientParams = {
   realtimeBaseUri?: string,
   publicKey: string,
   targetEnvironment: string,
+  targetProduct?: string,
 }
 
 type IdentifyParams = Record<string, any>
@@ -106,6 +107,8 @@ class Client {
 
   targetEnvironment: string
 
+  targetProduct?: string
+
   context: SystemContextInput
 
   constructor({
@@ -113,11 +116,13 @@ class Client {
     baseUri = 'https://api.dashx.com/graphql',
     realtimeBaseUri = 'wss://realtime.dashx.com',
     targetEnvironment,
+    targetProduct,
   }: ClientParams) {
     this.baseUri = baseUri
     this.realtimeBaseUri = realtimeBaseUri
     this.publicKey = publicKey
     this.targetEnvironment = targetEnvironment
+    this.targetProduct = targetProduct
     this.context = generateContext()
     this.loadIdentity()
     this.initGraphqlClient()
