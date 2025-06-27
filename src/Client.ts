@@ -97,6 +97,8 @@ class Client {
 
   #websocketManager: WebSocketManager | null = null
 
+  #notificationCallbacks: Set<(notification: InAppNotificationData) => void> = new Set()
+
   graphqlClient!: ApolloClient<NormalizedCacheObject>
 
   baseUri: string
@@ -744,6 +746,26 @@ class Client {
     return this.#websocketManager?.isConnected ?? false
   }
 
+  // Notification callback management
+  onNotification(callback: (notification: InAppNotificationData) => void): () => void {
+    this.#notificationCallbacks.add(callback)
+
+    // Return unsubscribe function
+    return () => {
+      this.#notificationCallbacks.delete(callback)
+    }
+  }
+
+  private notifyCallbacks(notification: InAppNotificationData): void {
+    this.#notificationCallbacks.forEach(callback => {
+      try {
+        callback(notification)
+      } catch (error) {
+        console.error('Error in notification callback:', error)
+      }
+    })
+  }
+
   // Flexible WebSocket connection method for different frameworks
   createWebSocketConnection(options?: {
     onMessage?: (_message: WebsocketMessageType) => void
@@ -827,7 +849,12 @@ class Client {
         break
 
       case WebsocketMessage.IN_APP_NOTIFICATION:
+        // Track that the notification was delivered
+        this.trackNotification({ id: _message.data.id, status: 'DELIVERED' })
+        // Add to cache for immediate UI update
         this.addInAppNotificationToCache(_message.data)
+        // Notify all registered callbacks
+        this.notifyCallbacks(_message.data)
         break
 
       default:
@@ -838,4 +865,4 @@ class Client {
 
 export default Client
 export { WebsocketMessage, DASHX_CLOSE_CODES }
-export type { ClientParams, InAppNotifications, WebsocketMessageType }
+export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData }
