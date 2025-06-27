@@ -1,5 +1,20 @@
 import { WebsocketMessageType } from './Client'
 
+/* eslint-disable no-unused-vars */
+export enum ReadyState {
+  CONNECTING = 0,
+  OPEN = 1,
+  CLOSING = 2,
+  CLOSED = 3,
+}
+/* eslint-enable no-unused-vars */
+
+export interface QueuedMessage {
+  message: WebsocketMessageType
+  timestamp: number
+  retryCount: number
+}
+
 export interface WebSocketOptions {
   url: string
   protocols?: string | string[]
@@ -7,6 +22,10 @@ export interface WebSocketOptions {
   maxReconnectAttempts?: number
   heartbeatInterval?: number
   heartbeatMessage?: string
+  connectionTimeout?: number
+  pingTimeout?: number
+  maxMessageRetries?: number
+  messageRetryInterval?: number
   shouldReconnect?: (_closeEvent: CloseEvent) => boolean
   onOpen?: (_event: Event) => void
   onClose?: (_event: CloseEvent) => void
@@ -21,9 +40,14 @@ export class WebSocketManager {
   private reconnectAttempts = 0
   private reconnectTimer: NodeJS.Timeout | null = null
   private heartbeatTimer: NodeJS.Timeout | null = null
+  private connectionTimeoutTimer: NodeJS.Timeout | null = null
+  private pingTimeoutTimer: NodeJS.Timeout | null = null
+  private messageRetryTimer: NodeJS.Timeout | null = null
   private isConnecting = false
   private shouldReconnect = true
   private lastCloseEvent: CloseEvent | null = null
+  private messageQueue: QueuedMessage[] = []
+  private isWaitingForPong = false
 
   private options: Required<WebSocketOptions>
 
@@ -33,6 +57,10 @@ export class WebSocketManager {
       maxReconnectAttempts: 20,
       heartbeatInterval: 30000,
       heartbeatMessage: 'ping',
+      connectionTimeout: 10000, // 10 seconds connection timeout
+      pingTimeout: 5000, // 5 seconds ping timeout
+      maxMessageRetries: 3,
+      messageRetryInterval: 1000,
       shouldReconnect: () => true,
       onOpen: () => {},
       onClose: () => {},
@@ -56,6 +84,15 @@ export class WebSocketManager {
     try {
       this.ws = new WebSocket(this.options.url, this.options.protocols)
       this.setupEventHandlers()
+
+      // Set connection timeout
+      this.connectionTimeoutTimer = setTimeout(() => {
+        if (this.ws?.readyState === WebSocket.CONNECTING) {
+          console.warn('WebSocket connection timeout')
+          this.ws.close()
+        }
+      }, this.options.connectionTimeout)
+
     } catch (error) {
       this.isConnecting = false
       this.options.onError(error as Event)
@@ -66,6 +103,7 @@ export class WebSocketManager {
   disconnect(): void {
     this.shouldReconnect = false
     this.clearTimers()
+    this.messageQueue = []
 
     if (this.ws) {
       this.ws.close()
@@ -77,7 +115,8 @@ export class WebSocketManager {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message))
     } else {
-      throw new Error('WebSocket is not connected')
+      // Queue message for later if not connected
+      this.queueMessage(message)
     }
   }
 
@@ -97,35 +136,100 @@ export class WebSocketManager {
     return this.ws?.readyState === WebSocket.OPEN
   }
 
+  get queuedMessageCount(): number {
+    return this.messageQueue.length
+  }
+
+  private queueMessage(message: WebsocketMessageType): void {
+    const queuedMessage: QueuedMessage = {
+      message,
+      timestamp: Date.now(),
+      retryCount: 0,
+    }
+    this.messageQueue.push(queuedMessage)
+    console.log(`Message queued. Queue size: ${this.messageQueue.length}`)
+  }
+
+  private processMessageQueue(): void {
+    if (!this.isConnected || this.messageQueue.length === 0) return
+
+    const messagesToSend = this.messageQueue.filter(
+      (queued) => queued.retryCount < this.options.maxMessageRetries
+    )
+
+    messagesToSend.forEach((queued) => {
+      try {
+        this.ws!.send(JSON.stringify(queued.message))
+        // Remove from queue on successful send
+        this.messageQueue = this.messageQueue.filter((m) => m !== queued)
+        console.log('Queued message sent successfully')
+      } catch {
+        queued.retryCount++
+        console.warn(`Failed to send queued message, retry ${queued.retryCount}/${this.options.maxMessageRetries}`)
+      }
+    })
+
+    // Remove messages that have exceeded max retries
+    this.messageQueue = this.messageQueue.filter(
+      (queued) => queued.retryCount < this.options.maxMessageRetries
+    )
+  }
+
   private setupEventHandlers(): void {
     if (!this.ws) return
 
     this.ws.onopen = (_event: Event) => {
       this.isConnecting = false
       this.reconnectAttempts = 0
+
+      // Clear connection timeout
+      if (this.connectionTimeoutTimer) {
+        clearTimeout(this.connectionTimeoutTimer)
+        this.connectionTimeoutTimer = null
+      }
+
       this.startHeartbeat()
+      this.processMessageQueue() // Send any queued messages
       this.options.onOpen(_event)
     }
 
     this.ws.onclose = (_event: CloseEvent) => {
       this.isConnecting = false
       this.stopHeartbeat()
+      this.clearPingTimeout()
+
+      // Clear connection timeout
+      if (this.connectionTimeoutTimer) {
+        clearTimeout(this.connectionTimeoutTimer)
+        this.connectionTimeoutTimer = null
+      }
+
       this.options.onClose(_event)
       this.lastCloseEvent = _event
 
-      if (this.shouldReconnect && !_event.wasClean) {
+      // Always attempt to reconnect unless explicitly told not to
+      if (this.shouldReconnect) {
         this.scheduleReconnect()
       }
     }
 
     this.ws.onerror = (_event: Event) => {
       this.isConnecting = false
+
+      // Clear connection timeout
+      if (this.connectionTimeoutTimer) {
+        clearTimeout(this.connectionTimeoutTimer)
+        this.connectionTimeoutTimer = null
+      }
+
       this.options.onError(_event)
     }
 
     this.ws.onmessage = (_event: MessageEvent) => {
       // Handle heartbeat responses
       if (_event.data === 'pong' || _event.data === this.options.heartbeatMessage) {
+        this.clearPingTimeout()
+        this.isWaitingForPong = false
         return
       }
 
@@ -148,19 +252,44 @@ export class WebSocketManager {
     this.reconnectAttempts++
     this.options.onReconnect(this.reconnectAttempts)
 
+    // Exponential backoff with jitter
+    const baseDelay = this.options.reconnectInterval
+    const maxDelay = 30000 // 30 seconds max
+    const exponentialDelay = Math.min(baseDelay * Math.pow(2, this.reconnectAttempts - 1), maxDelay)
+    const jitter = Math.random() * 1000 // Add up to 1 second of jitter
+    const finalDelay = exponentialDelay + jitter
+
+    console.log(`Scheduling reconnect attempt ${this.reconnectAttempts} in ${Math.round(finalDelay)}ms`)
+
     this.reconnectTimer = setTimeout(() => {
       this.connect()
-    }, this.options.reconnectInterval)
+    }, finalDelay)
   }
 
   private startHeartbeat(): void {
     if (this.options.heartbeatInterval <= 0) return
 
     this.heartbeatTimer = setInterval(() => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
+      if (this.ws?.readyState === WebSocket.OPEN && !this.isWaitingForPong) {
         this.ws.send(this.options.heartbeatMessage)
+        this.isWaitingForPong = true
+
+        // Set ping timeout
+        this.pingTimeoutTimer = setTimeout(() => {
+          if (this.isWaitingForPong) {
+            console.warn('Ping timeout - no pong received')
+            this.ws?.close()
+          }
+        }, this.options.pingTimeout)
       }
     }, this.options.heartbeatInterval)
+  }
+
+  private clearPingTimeout(): void {
+    if (this.pingTimeoutTimer) {
+      clearTimeout(this.pingTimeoutTimer)
+      this.pingTimeoutTimer = null
+    }
   }
 
   private stopHeartbeat(): void {
@@ -168,12 +297,22 @@ export class WebSocketManager {
       clearInterval(this.heartbeatTimer)
       this.heartbeatTimer = null
     }
+    this.clearPingTimeout()
+    this.isWaitingForPong = false
   }
 
   private clearTimers(): void {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
+    }
+    if (this.connectionTimeoutTimer) {
+      clearTimeout(this.connectionTimeoutTimer)
+      this.connectionTimeoutTimer = null
+    }
+    if (this.messageRetryTimer) {
+      clearTimeout(this.messageRetryTimer)
+      this.messageRetryTimer = null
     }
     this.stopHeartbeat()
   }

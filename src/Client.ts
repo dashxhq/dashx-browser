@@ -70,7 +70,7 @@ type InAppNotifications = FetchInAppNotificationsQuery['notifications']
 type InAppNotificationData = Pick<FetchInAppNotificationsQuery['notifications'][0], 'id' | 'readAt' | 'renderedContent' | 'sentAt'>
 
 type SubscribeData = {
-  accountUid: string,
+  targetProduct?: string,
 }
 
 /* eslint-disable no-unused-vars */
@@ -813,7 +813,7 @@ class Client {
     const subscribeMessage: WebsocketMessageType = {
       type: WebsocketMessage.SUBSCRIBE,
       data: {
-        accountUid: this.#accountUid,
+        targetProduct: this.targetProduct,
       },
     }
 
