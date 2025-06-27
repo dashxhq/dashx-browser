@@ -1,6 +1,6 @@
 import Client, { WebsocketMessage, DASHX_CLOSE_CODES } from './Client'
 import WebSocketManager, { ReadyState } from './WebSocketManager'
-import type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData } from './Client'
+import type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule } from './Client'
 import type { WebSocketOptions, QueuedMessage } from './WebSocketManager'
 
 export default (params: ClientParams): Client => new Client(params)
@@ -8,9 +8,10 @@ export { WebsocketMessage, WebSocketManager, DASHX_CLOSE_CODES, ReadyState }
 export type {
   Client,
   ClientParams,
-  InAppNotifications,
-  WebsocketMessageType,
   InAppNotificationData,
+  InAppNotifications,
+  ProductVariantReleaseRule,
+  QueuedMessage,
+  WebsocketMessageType,
   WebSocketOptions,
-  QueuedMessage
 }

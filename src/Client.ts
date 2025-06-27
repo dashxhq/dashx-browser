@@ -14,6 +14,7 @@ import {
   FetchContactsDocument,
   FetchInAppNotificationsAggregateDocument,
   FetchInAppNotificationsDocument,
+  FetchProductVariantReleaseRuleDocument,
   FetchRecordDocument,
   FetchStoredPreferencesDocument,
   IdentifyAccountDocument,
@@ -29,6 +30,7 @@ import {
 import type {
   ContactStubInput,
   FetchInAppNotificationsQuery,
+  FetchProductVariantReleaseRuleQuery,
   SystemContextInput,
   TrackEventInput,
   TrackNotificationInput,
@@ -68,6 +70,8 @@ type SubscriptionSucceededData = {
 type InAppNotifications = FetchInAppNotificationsQuery['notifications']
 
 type InAppNotificationData = Pick<FetchInAppNotificationsQuery['notifications'][0], 'id' | 'readAt' | 'renderedContent' | 'sentAt'>
+
+type ProductVariantReleaseRule = FetchProductVariantReleaseRuleQuery['productVariantReleaseRule']
 
 type SubscribeData = {
   targetProduct?: string,
@@ -727,6 +731,54 @@ class Client {
     return response?.data?.asset
   }
 
+  async fetchProductVariantReleaseRule(): Promise<ProductVariantReleaseRule> {
+    if (!this.targetProduct) {
+      throw new Error('`targetProduct` must be set when initializing the client')
+    }
+
+    const variables = {
+      input: {
+        targetProduct: this.targetProduct,
+        targetEnvironment: this.targetEnvironment,
+      },
+    }
+
+    const response = await this.graphqlClient.query({
+      query: FetchProductVariantReleaseRuleDocument,
+      variables,
+    })
+
+    return response?.data?.productVariantReleaseRule
+  }
+
+  watchFetchProductVariantReleaseRule(callback: (_data: ProductVariantReleaseRule | null) => void): void {
+    if (!this.targetProduct) {
+      throw new Error('`targetProduct` must be set when initializing the client')
+    }
+
+    const variables = {
+      input: {
+        targetProduct: this.targetProduct,
+        targetEnvironment: this.targetEnvironment,
+      },
+    }
+
+    const observableQuery = this.graphqlClient.watchQuery({
+      query: FetchProductVariantReleaseRuleDocument,
+      variables,
+    })
+
+    observableQuery.subscribe({
+      next(_response) {
+        callback(_response.data.productVariantReleaseRule)
+      },
+      error(_err) {
+        console.error(_err)
+        callback(null)
+      },
+    })
+  }
+
   // WebSocket methods for real-time functionality
   connectWebSocket(): void {
     if (!this.#accountUid) {
@@ -877,4 +929,4 @@ class Client {
 
 export default Client
 export { WebsocketMessage, DASHX_CLOSE_CODES }
-export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData }
+export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule }
