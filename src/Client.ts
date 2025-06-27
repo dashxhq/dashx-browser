@@ -78,6 +78,8 @@ enum WebsocketMessage {
   SUBSCRIBE = 'SUBSCRIBE',
   SUBSCRIPTION_SUCCEEDED = 'SUBSCRIPTION_SUCCEEDED',
   IN_APP_NOTIFICATION = 'IN_APP_NOTIFICATION',
+  PING = 'PING',
+  PONG = 'PONG',
 }
 /* eslint-enable no-unused-vars */
 
@@ -85,6 +87,8 @@ type WebsocketMessageType =
   | { type: WebsocketMessage.SUBSCRIBE, data: SubscribeData }
   | { type: WebsocketMessage.SUBSCRIPTION_SUCCEEDED, data: SubscriptionSucceededData }
   | { type: WebsocketMessage.IN_APP_NOTIFICATION, data: InAppNotificationData }
+  | { type: WebsocketMessage.PING }
+  | { type: WebsocketMessage.PONG }
 
 type OptionalTimestampTrackNotificationInput = Omit<TrackNotificationInput, 'timestamp'> & { timestamp?: Pick<TrackNotificationInput, 'timestamp'> }
 
@@ -844,6 +848,14 @@ class Client {
 
   private handleWebSocketMessage(_message: WebsocketMessageType): void {
     switch (_message.type) {
+      case WebsocketMessage.PING:
+        console.log('Ping received')
+        break
+
+      case WebsocketMessage.PONG:
+        console.log('Pong received')
+        break
+
       case WebsocketMessage.SUBSCRIPTION_SUCCEEDED:
         console.log('Successfully subscribed to notifications')
         break

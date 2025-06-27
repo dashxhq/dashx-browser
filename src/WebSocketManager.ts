@@ -1,4 +1,4 @@
-import { WebsocketMessageType } from './Client'
+import { WebsocketMessage, WebsocketMessageType } from './Client'
 
 /* eslint-disable no-unused-vars */
 export enum ReadyState {
@@ -21,7 +21,7 @@ export interface WebSocketOptions {
   reconnectInterval?: number
   maxReconnectAttempts?: number
   heartbeatInterval?: number
-  heartbeatMessage?: string
+  heartbeatMessage?: WebsocketMessageType
   connectionTimeout?: number
   pingTimeout?: number
   maxMessageRetries?: number
@@ -56,7 +56,7 @@ export class WebSocketManager {
       reconnectInterval: 5000,
       maxReconnectAttempts: 20,
       heartbeatInterval: 30000,
-      heartbeatMessage: 'ping',
+      heartbeatMessage: { type: WebsocketMessage.PING },
       connectionTimeout: 10000, // 10 seconds connection timeout
       pingTimeout: 5000, // 5 seconds ping timeout
       maxMessageRetries: 3,
@@ -271,7 +271,7 @@ export class WebSocketManager {
 
     this.heartbeatTimer = setInterval(() => {
       if (this.ws?.readyState === WebSocket.OPEN && !this.isWaitingForPong) {
-        this.ws.send(this.options.heartbeatMessage)
+        this.ws.send(JSON.stringify(this.options.heartbeatMessage))
         this.isWaitingForPong = true
 
         // Set ping timeout
