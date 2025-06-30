@@ -1,6 +1,17 @@
-import Client, { WebsocketMessage } from './Client'
-import type { ClientParams, InAppNotifications, WebsocketMessageType } from './Client'
+import Client, { WebsocketMessage, DASHX_CLOSE_CODES } from './Client'
+import WebSocketManager, { ReadyState } from './WebSocketManager'
+import type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule } from './Client'
+import type { WebSocketOptions, QueuedMessage } from './WebSocketManager'
 
 export default (params: ClientParams): Client => new Client(params)
-export { WebsocketMessage }
-export type { Client, ClientParams, InAppNotifications, WebsocketMessageType }
+export { WebsocketMessage, WebSocketManager, DASHX_CLOSE_CODES, ReadyState }
+export type {
+  Client,
+  ClientParams,
+  InAppNotificationData,
+  InAppNotifications,
+  ProductVariantReleaseRule,
+  QueuedMessage,
+  WebsocketMessageType,
+  WebSocketOptions,
+}

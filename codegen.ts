@@ -10,7 +10,7 @@ const config: CodegenConfig = {
       plugins: [
         {
           add: {
-            content: '/* eslint-disable max-len */',
+            content: '/* eslint-disable max-len, no-unused-vars */',
           },
         },
         'graphql-codegen-typescript-operation-types',

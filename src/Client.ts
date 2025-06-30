@@ -4,6 +4,7 @@ import { setContext } from '@apollo/client/link/context'
 
 import SearchRecordsInputBuilder, { FetchRecordsOptions, SearchRecordsOptions } from './SearchRecordsInputBuilder'
 import generateContext from './context'
+import WebSocketManager from './WebSocketManager'
 import { getItem, setItem } from './storage'
 import {
   AddItemToCartDocument,
@@ -13,6 +14,7 @@ import {
   FetchContactsDocument,
   FetchInAppNotificationsAggregateDocument,
   FetchInAppNotificationsDocument,
+  FetchProductVariantReleaseRuleDocument,
   FetchRecordDocument,
   FetchStoredPreferencesDocument,
   IdentifyAccountDocument,
@@ -28,6 +30,7 @@ import {
 import type {
   ContactStubInput,
   FetchInAppNotificationsQuery,
+  FetchProductVariantReleaseRuleQuery,
   SystemContextInput,
   TrackEventInput,
   TrackNotificationInput,
@@ -37,11 +40,19 @@ const UPLOAD_RETRY_LIMIT = 5
 const UPLOAD_RETRY_TIMEOUT = 3000
 const UNIDENTIFIED_USER_ERROR = 'This operation can be performed only by an identified user. Ensure `dashx.identify` is run before calling this method.'
 
+// DashX WebSocket close codes
+const DASHX_CLOSE_CODES = [
+  40000, // Bad request
+  40001, // Invalid Data
+  50000  // Internal server error
+] as const
+
 type ClientParams = {
   baseUri?: string,
   realtimeBaseUri?: string,
   publicKey: string,
   targetEnvironment: string,
+  targetProduct?: string,
 }
 
 type IdentifyParams = Record<string, any>
@@ -60,20 +71,32 @@ type InAppNotifications = FetchInAppNotificationsQuery['notifications']
 
 type InAppNotificationData = Pick<FetchInAppNotificationsQuery['notifications'][0], 'id' | 'readAt' | 'renderedContent' | 'sentAt'>
 
+type ProductVariantReleaseRule = FetchProductVariantReleaseRuleQuery['productVariantReleaseRule']
+
 type SubscribeData = {
-  accountUid: string,
+  accountUid?: string | null,
+  accountAnonymousUid?: string | null,
+  targetProduct?: string | null,
 }
 
+/* eslint-disable no-unused-vars */
 enum WebsocketMessage {
+  PING = 'PING',
+  PONG = 'PONG',
   SUBSCRIBE = 'SUBSCRIBE',
   SUBSCRIPTION_SUCCEEDED = 'SUBSCRIPTION_SUCCEEDED',
   IN_APP_NOTIFICATION = 'IN_APP_NOTIFICATION',
+  PRODUCT_VARIANT_RELEASE_RULE_UPDATED = 'PRODUCT_VARIANT_RELEASE_RULE_UPDATED',
 }
+/* eslint-enable no-unused-vars */
 
 type WebsocketMessageType =
+  | { type: WebsocketMessage.PING }
+  | { type: WebsocketMessage.PONG }
   | { type: WebsocketMessage.SUBSCRIBE, data: SubscribeData }
   | { type: WebsocketMessage.SUBSCRIPTION_SUCCEEDED, data: SubscriptionSucceededData }
   | { type: WebsocketMessage.IN_APP_NOTIFICATION, data: InAppNotificationData }
+  | { type: WebsocketMessage.PRODUCT_VARIANT_RELEASE_RULE_UPDATED, data: ProductVariantReleaseRule }
 
 type OptionalTimestampTrackNotificationInput = Omit<TrackNotificationInput, 'timestamp'> & { timestamp?: Pick<TrackNotificationInput, 'timestamp'> }
 
@@ -83,6 +106,12 @@ class Client {
   #accountUid: string | null = null
 
   #identityToken: string | null = null
+
+  #websocketManager: WebSocketManager | null = null
+
+  #notificationCallbacks: Set<(notification: InAppNotificationData) => void> = new Set()
+
+  #watchedQueries: Set<{ refetch: () => void; name: string }> = new Set()
 
   graphqlClient!: ApolloClient<NormalizedCacheObject>
 
@@ -94,6 +123,8 @@ class Client {
 
   targetEnvironment: string
 
+  targetProduct?: string
+
   context: SystemContextInput
 
   constructor({
@@ -101,11 +132,13 @@ class Client {
     baseUri = 'https://api.dashx.com/graphql',
     realtimeBaseUri = 'wss://realtime.dashx.com',
     targetEnvironment,
+    targetProduct,
   }: ClientParams) {
     this.baseUri = baseUri
     this.realtimeBaseUri = realtimeBaseUri
     this.publicKey = publicKey
     this.targetEnvironment = targetEnvironment
+    this.targetProduct = targetProduct
     this.context = generateContext()
     this.loadIdentity()
     this.initGraphqlClient()
@@ -136,6 +169,11 @@ class Client {
     }
 
     setItem('accountUid', this.#accountUid)
+
+    // If WebSocket is connected and we just set an accountUid, subscribe to notifications
+    if (this.#accountUid && this.#websocketManager?.isConnected) {
+      this.subscribeToNotifications()
+    }
   }
 
   get identityToken(): string | null {
@@ -182,9 +220,8 @@ class Client {
     this.identityToken = getItem('identityToken') || null
   }
 
-  identify(): Promise<Response>
-  identify(uid: string): Promise<Response>
-  identify(options: IdentifyParams): Promise<Response>
+  identify(_uid: string): Promise<Response>
+  identify(_options: IdentifyParams): Promise<Response>
   identify(options?: string | IdentifyParams): Promise<any> | void {
     let variables = { input: {} }
 
@@ -395,7 +432,7 @@ class Client {
     })
   }
 
-  watchFetchInAppNotifications(callback: (data: InAppNotifications) => void): void {
+  watchFetchInAppNotifications(callback: (_data: InAppNotifications) => void): void {
     if (!this.#accountUid) {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
@@ -411,19 +448,23 @@ class Client {
       variables,
     })
 
+    // Register this query for automatic refetch on WebSocket reconnection
+    this.registerWatchedQuery(() => {
+      observableQuery.refetch()
+    }, 'watchFetchInAppNotifications')
+
     observableQuery.subscribe({
-      next(response) {
-        callback(response.data.notifications)
+      next(_response) {
+        callback(_response.data.notifications)
       },
-      error(err) {
-        // eslint-disable-next-line no-console
-        console.error(err)
+      error(_err) {
+        console.error(_err)
         callback([])
       },
     })
   }
 
-  watchFetchInAppNotificationsAggregate(callback: (data: number) => void): void {
+  watchFetchInAppNotificationsAggregate(callback: (_data: number) => void): void {
     if (!this.#accountUid) {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
@@ -442,32 +483,33 @@ class Client {
       variables,
     })
 
+    // Register this query for automatic refetch on WebSocket reconnection
+    this.registerWatchedQuery(() => {
+      observableQuery.refetch()
+    }, 'watchFetchInAppNotificationsAggregate')
+
     observableQuery.subscribe({
-      next(response) {
-        callback(response.data.notificationsAggregate.count || 0)
+      next(_response) {
+        callback(_response.data.notificationsAggregate.count || 0)
       },
-      error(err) {
-        // eslint-disable-next-line no-console
-        console.error(err)
+      error(_err) {
+        console.error(_err)
         callback(0)
       },
     })
   }
 
-  searchRecords(resource: string): SearchRecordsInputBuilder
-  searchRecords(resource: string, options: SearchRecordsOptions): Promise<any>
-  searchRecords(
-    resource: string,
-    options?: SearchRecordsOptions,
-  ): SearchRecordsInputBuilder | Promise<any> {
-    if (!options) {
+  searchRecords(_resource: string): SearchRecordsInputBuilder
+  searchRecords(_resource: string, _options: SearchRecordsOptions): Promise<any>
+  searchRecords(_resource: string, _options?: SearchRecordsOptions): SearchRecordsInputBuilder | Promise<any> {
+    if (!_options) {
       return new SearchRecordsInputBuilder(
-        resource,
-        async (wrappedOptions) => {
+        _resource,
+        async (_wrappedOptions) => {
           const variables = {
             input: {
-              ...wrappedOptions,
-              resource,
+              ..._wrappedOptions,
+              resource: _resource,
             },
           }
 
@@ -482,7 +524,7 @@ class Client {
     }
 
     const variables = {
-      input: { ...options, resource },
+      input: { ..._options, resource: _resource },
     }
 
     const result = this.graphqlClient.query({ query: SearchRecordsDocument, variables })
@@ -709,8 +751,237 @@ class Client {
 
     return response?.data?.asset
   }
+
+  async fetchProductVariantReleaseRule(): Promise<ProductVariantReleaseRule> {
+    if (!this.targetProduct) {
+      throw new Error('`targetProduct` must be set when initializing the client')
+    }
+
+    const variables = {
+      input: {
+        targetProduct: this.targetProduct,
+        targetEnvironment: this.targetEnvironment,
+      },
+    }
+
+    const response = await this.graphqlClient.query({
+      query: FetchProductVariantReleaseRuleDocument,
+      variables,
+    })
+
+    return response?.data?.productVariantReleaseRule
+  }
+
+  watchFetchProductVariantReleaseRule(callback: (_data: ProductVariantReleaseRule | null) => void): void {
+    if (!this.targetProduct) {
+      throw new Error('`targetProduct` must be set when initializing the client')
+    }
+
+    const variables = {
+      input: {
+        targetProduct: this.targetProduct,
+        targetEnvironment: this.targetEnvironment,
+      },
+    }
+
+    const observableQuery = this.graphqlClient.watchQuery({
+      query: FetchProductVariantReleaseRuleDocument,
+      variables,
+    })
+
+    // Register this query for automatic refetch on WebSocket reconnection
+    this.registerWatchedQuery(() => {
+      observableQuery.refetch()
+    }, 'watchFetchProductVariantReleaseRule')
+
+    observableQuery.subscribe({
+      next(_response) {
+        callback(_response.data.productVariantReleaseRule)
+      },
+      error(_err) {
+        console.error(_err)
+        callback(null)
+      },
+    })
+  }
+
+  // WebSocket methods for real-time functionality
+  connectWebSocket(): void {
+    if (this.#websocketManager?.isConnected) {
+      return
+    }
+
+    this.#websocketManager = this.createWebSocketConnection()
+    this.#websocketManager.connect()
+  }
+
+  disconnectWebSocket(): void {
+    this.#websocketManager?.disconnect()
+    this.#websocketManager = null
+  }
+
+  get isWebSocketConnected(): boolean {
+    return this.#websocketManager?.isConnected ?? false
+  }
+
+  // Register a watched query for automatic refetch on WebSocket reconnection
+  private registerWatchedQuery(refetch: () => void, name: string): void {
+    this.#watchedQueries.add({ refetch, name })
+  }
+
+  // Trigger refetch of all watched queries
+  private refetchWatchedQueries(): void {
+    this.#watchedQueries.forEach(({ refetch, name }) => {
+      try {
+        refetch()
+      } catch (error) {
+        console.error(`Error refetching ${name}:`, error)
+      }
+    })
+  }
+
+  // Notification callback management
+  onNotification(callback: (notification: InAppNotificationData) => void): () => void {
+    this.#notificationCallbacks.add(callback)
+
+    // Return unsubscribe function
+    return () => {
+      this.#notificationCallbacks.delete(callback)
+    }
+  }
+
+  private notifyCallbacks(notification: InAppNotificationData): void {
+    this.#notificationCallbacks.forEach(callback => {
+      try {
+        callback(notification)
+      } catch (error) {
+        console.error('Error in notification callback:', error)
+      }
+    })
+  }
+
+  // Flexible WebSocket connection method for different frameworks
+  createWebSocketConnection(options?: {
+    onMessage?: (_message: WebsocketMessageType) => void
+    onOpen?: () => void
+    onClose?: (_event: CloseEvent) => void
+    onError?: (_error: Event) => void
+    onReconnect?: (_attempt: number) => void
+    onReconnectFailed?: () => void
+    queryParams?: Record<string, string>
+    shouldReconnect?: boolean | ((_closeEvent: CloseEvent) => boolean)
+  }): WebSocketManager {
+    // Build URL with query parameters
+    let url = this.realtimeBaseUri
+    if (options?.queryParams) {
+      const params = new URLSearchParams()
+      Object.entries(options.queryParams).forEach(([ key, value ]) => {
+        params.append(key, value)
+      })
+      url += `?${params.toString()}`
+    }
+
+    const wsManager = new WebSocketManager({
+      url,
+      onOpen: () => {
+        // Automatically subscribe to notifications
+        this.subscribeToNotifications(wsManager)
+        // Trigger refetch of all watched queries when WebSocket connects
+        setTimeout(() => {
+          this.refetchWatchedQueries()
+        }, 100)
+        options?.onOpen?.()
+      },
+      onMessage: (event: MessageEvent) => {
+        try {
+          const message: WebsocketMessageType = JSON.parse(event.data)
+          this.handleWebSocketMessage(message)
+          options?.onMessage?.(message)
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error)
+        }
+      },
+      onClose: (event: CloseEvent) => {
+        options?.onClose?.(event)
+      },
+      onError: (error) => {
+        console.error('WebSocket error:', error)
+        options?.onError?.(error)
+      },
+      onReconnect: (attempt) => {
+        console.log(`WebSocket reconnecting... attempt ${attempt}`)
+        options?.onReconnect?.(attempt)
+      },
+      onReconnectFailed: () => {
+        console.error('WebSocket reconnection failed')
+        options?.onReconnectFailed?.()
+      },
+      shouldReconnect: options?.shouldReconnect ?? ((closeEvent: CloseEvent) => {
+        // Don't retry on DashX-specific error codes
+        if (DASHX_CLOSE_CODES.includes(closeEvent.code as any)) {
+          console.warn(`WebSocket closed with DashX error code ${closeEvent.code}, not retrying`)
+          return false
+        }
+        // Retry for other close codes (network issues, etc.)
+        return true
+      }),
+    })
+
+    return wsManager
+  }
+
+  private subscribeToNotifications(wsManager?: WebSocketManager): void {
+    const manager = wsManager || this.#websocketManager
+    if (!manager) {
+      return
+    }
+
+    if (!manager.isConnected) {
+      return
+    }
+
+    const subscribeMessage: WebsocketMessageType = {
+      type: WebsocketMessage.SUBSCRIBE,
+      data: {
+        accountUid: this.#accountUid,
+        targetProduct: this.targetProduct,
+      },
+    }
+
+    manager.send(subscribeMessage)
+  }
+
+  private handleWebSocketMessage(_message: WebsocketMessageType): void {
+    switch (_message.type) {
+      case WebsocketMessage.PING:
+        console.log('Ping received')
+        break
+
+      case WebsocketMessage.PONG:
+        console.log('Pong received')
+        break
+
+      case WebsocketMessage.SUBSCRIPTION_SUCCEEDED:
+        console.log('Successfully subscribed to notifications')
+        break
+
+      case WebsocketMessage.IN_APP_NOTIFICATION:
+        // Track that the notification was delivered if accountUid is available
+        if (this.#accountUid) {
+          this.trackNotification({ id: _message.data.id, status: 'DELIVERED' })
+          // Add to cache for immediate UI update
+          this.addInAppNotificationToCache(_message.data)
+        }
+        // Notify all registered callbacks
+        this.notifyCallbacks(_message.data)
+        break
+
+      default:
+        console.warn('Unknown WebSocket message type:', _message.type)
+    }
+  }
 }
 
 export default Client
-export { WebsocketMessage }
-export type { ClientParams, InAppNotifications, WebsocketMessageType }
+export { WebsocketMessage, DASHX_CLOSE_CODES }
+export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule }

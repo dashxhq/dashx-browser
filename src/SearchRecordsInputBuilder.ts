@@ -9,15 +9,15 @@ export type FetchRecordsOptions = Omit<FetchRecordInput, 'resource' | 'recordId'
 class SearchRecordsInputBuilder {
   private options: SearchRecordsOptions
 
-  private callback: (options: SearchRecordsOptions) => Promise<any>
+  private callback: (_options: SearchRecordsOptions) => Promise<any>
 
   constructor(
-    resource: string,
-    callback: (options: SearchRecordsOptions) => Promise<any>,
+    _resource: string,
+    _callback: (_options: any) => Promise<any>,
   ) {
     // @ts-ignore
-    this.options = { resource }
-    this.callback = callback
+    this.options = { resource: _resource }
+    this.callback = _callback
   }
 
   limit(by: SearchRecordsOptions['limit']) {
@@ -60,8 +60,8 @@ class SearchRecordsInputBuilder {
     return this
   }
 
-  async all(withOptions?: SearchRecordsOptions) {
-    this.options = { ...this.options, ...withOptions }
+  async all(_withOptions?: SearchRecordsOptions) {
+    this.options = { ...this.options, ..._withOptions }
     const data = await this.callback(this.options)
     return data
   }
@@ -75,6 +75,10 @@ class SearchRecordsInputBuilder {
     }
 
     return null
+  }
+
+  withOptions(_options: any) {
+    // ... existing code ...
   }
 }
 

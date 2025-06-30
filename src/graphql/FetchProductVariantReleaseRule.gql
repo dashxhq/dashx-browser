@@ -1,0 +1,12 @@
+query FetchProductVariantReleaseRule($input: FetchProductVariantReleaseRuleInput!) {
+  productVariantReleaseRule: fetchProductVariantReleaseRule(input: $input) {
+    id
+    productVariantId
+    minimumReleaseId
+    recommendedReleaseId
+    latestReleaseId
+    autoRecommendNewReleases
+    createdAt
+    updatedAt
+  }
+}
