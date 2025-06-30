@@ -74,7 +74,9 @@ type InAppNotificationData = Pick<FetchInAppNotificationsQuery['notifications'][
 type ProductVariantReleaseRule = FetchProductVariantReleaseRuleQuery['productVariantReleaseRule']
 
 type SubscribeData = {
-  targetProduct?: string,
+  accountUid?: string | null,
+  accountAnonymousUid?: string | null,
+  targetProduct?: string | null,
 }
 
 /* eslint-disable no-unused-vars */
@@ -163,6 +165,11 @@ class Client {
     }
 
     setItem('accountUid', this.#accountUid)
+
+    // If WebSocket is connected and we just set an accountUid, subscribe to notifications
+    if (this.#accountUid && this.#websocketManager?.isConnected) {
+      this.subscribeToNotifications()
+    }
   }
 
   get identityToken(): string | null {
@@ -781,10 +788,6 @@ class Client {
 
   // WebSocket methods for real-time functionality
   connectWebSocket(): void {
-    if (!this.#accountUid) {
-      throw new Error(UNIDENTIFIED_USER_ERROR)
-    }
-
     if (this.#websocketManager?.isConnected) {
       return
     }
@@ -833,10 +836,6 @@ class Client {
     queryParams?: Record<string, string>
     shouldReconnect?: (_closeEvent: CloseEvent) => boolean
   }): WebSocketManager {
-    if (!this.#accountUid) {
-      throw new Error(UNIDENTIFIED_USER_ERROR)
-    }
-
     // Build URL with query parameters
     let url = this.realtimeBaseUri
     if (options?.queryParams) {
@@ -886,11 +885,12 @@ class Client {
 
   private subscribeToNotifications(wsManager?: WebSocketManager): void {
     const manager = wsManager || this.#websocketManager
-    if (!manager || !this.#accountUid) return
+    if (!manager) return
 
     const subscribeMessage: WebsocketMessageType = {
       type: WebsocketMessage.SUBSCRIBE,
       data: {
+        accountUid: this.#accountUid,
         targetProduct: this.targetProduct,
       },
     }
@@ -913,10 +913,12 @@ class Client {
         break
 
       case WebsocketMessage.IN_APP_NOTIFICATION:
-        // Track that the notification was delivered
-        this.trackNotification({ id: _message.data.id, status: 'DELIVERED' })
-        // Add to cache for immediate UI update
-        this.addInAppNotificationToCache(_message.data)
+        // Track that the notification was delivered if accountUid is available
+        if (this.#accountUid) {
+          this.trackNotification({ id: _message.data.id, status: 'DELIVERED' })
+          // Add to cache for immediate UI update
+          this.addInAppNotificationToCache(_message.data)
+        }
         // Notify all registered callbacks
         this.notifyCallbacks(_message.data)
         break
