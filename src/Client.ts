@@ -43,7 +43,7 @@ const UNIDENTIFIED_USER_ERROR = 'This operation can be performed only by an iden
 // DashX WebSocket close codes
 const DASHX_CLOSE_CODES = [
   40000, // Bad request
-  40001, // Unauthorized
+  40001, // Invalid Data
   50000  // Internal server error
 ] as const
 
