@@ -109,6 +109,8 @@ class Client {
 
   #notificationCallbacks: Set<(notification: InAppNotificationData) => void> = new Set()
 
+  #watchedQueries: Set<{ refetch: () => void; name: string }> = new Set()
+
   graphqlClient!: ApolloClient<NormalizedCacheObject>
 
   baseUri: string
@@ -444,6 +446,11 @@ class Client {
       variables,
     })
 
+    // Register this query for automatic refetch on WebSocket reconnection
+    this.registerWatchedQuery(() => {
+      observableQuery.refetch()
+    }, 'watchFetchInAppNotifications')
+
     observableQuery.subscribe({
       next(_response) {
         callback(_response.data.notifications)
@@ -473,6 +480,11 @@ class Client {
       query: FetchInAppNotificationsAggregateDocument,
       variables,
     })
+
+    // Register this query for automatic refetch on WebSocket reconnection
+    this.registerWatchedQuery(() => {
+      observableQuery.refetch()
+    }, 'watchFetchInAppNotificationsAggregate')
 
     observableQuery.subscribe({
       next(_response) {
@@ -775,6 +787,11 @@ class Client {
       variables,
     })
 
+    // Register this query for automatic refetch on WebSocket reconnection
+    this.registerWatchedQuery(() => {
+      observableQuery.refetch()
+    }, 'watchFetchProductVariantReleaseRule')
+
     observableQuery.subscribe({
       next(_response) {
         callback(_response.data.productVariantReleaseRule)
@@ -803,6 +820,22 @@ class Client {
 
   get isWebSocketConnected(): boolean {
     return this.#websocketManager?.isConnected ?? false
+  }
+
+  // Register a watched query for automatic refetch on WebSocket reconnection
+  private registerWatchedQuery(refetch: () => void, name: string): void {
+    this.#watchedQueries.add({ refetch, name })
+  }
+
+  // Trigger refetch of all watched queries
+  private refetchWatchedQueries(): void {
+    this.#watchedQueries.forEach(({ refetch, name }) => {
+      try {
+        refetch()
+      } catch (error) {
+        console.error(`Error refetching ${name}:`, error)
+      }
+    })
   }
 
   // Notification callback management
@@ -834,7 +867,7 @@ class Client {
     onReconnect?: (_attempt: number) => void
     onReconnectFailed?: () => void
     queryParams?: Record<string, string>
-    shouldReconnect?: (_closeEvent: CloseEvent) => boolean
+    shouldReconnect?: boolean | ((_closeEvent: CloseEvent) => boolean)
   }): WebSocketManager {
     // Build URL with query parameters
     let url = this.realtimeBaseUri
@@ -851,6 +884,10 @@ class Client {
       onOpen: () => {
         // Automatically subscribe to notifications
         this.subscribeToNotifications(wsManager)
+        // Trigger refetch of all watched queries when WebSocket connects
+        setTimeout(() => {
+          this.refetchWatchedQueries()
+        }, 100)
         options?.onOpen?.()
       },
       onMessage: (event: MessageEvent) => {
@@ -877,7 +914,15 @@ class Client {
         console.error('WebSocket reconnection failed')
         options?.onReconnectFailed?.()
       },
-      shouldReconnect: options?.shouldReconnect,
+      shouldReconnect: options?.shouldReconnect ?? ((closeEvent: CloseEvent) => {
+        // Don't retry on DashX-specific error codes
+        if (DASHX_CLOSE_CODES.includes(closeEvent.code as any)) {
+          console.warn(`WebSocket closed with DashX error code ${closeEvent.code}, not retrying`)
+          return false
+        }
+        // Retry for other close codes (network issues, etc.)
+        return true
+      }),
     })
 
     return wsManager
@@ -885,7 +930,13 @@ class Client {
 
   private subscribeToNotifications(wsManager?: WebSocketManager): void {
     const manager = wsManager || this.#websocketManager
-    if (!manager) return
+    if (!manager) {
+      return
+    }
+
+    if (!manager.isConnected) {
+      return
+    }
 
     const subscribeMessage: WebsocketMessageType = {
       type: WebsocketMessage.SUBSCRIBE,

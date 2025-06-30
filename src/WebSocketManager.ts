@@ -26,7 +26,7 @@ export interface WebSocketOptions {
   pingTimeout?: number
   maxMessageRetries?: number
   messageRetryInterval?: number
-  shouldReconnect?: (_closeEvent: CloseEvent) => boolean
+  shouldReconnect?: boolean | ((_closeEvent: CloseEvent) => boolean)
   onOpen?: (_event: Event) => void
   onClose?: (_event: CloseEvent) => void
   onError?: (_event: Event) => void
@@ -49,7 +49,9 @@ export class WebSocketManager {
   private messageQueue: QueuedMessage[] = []
   private isWaitingForPong = false
 
-  private options: Required<WebSocketOptions>
+  private options: Required<Omit<WebSocketOptions, 'shouldReconnect'>> & {
+    shouldReconnect: (_closeEvent: CloseEvent) => boolean
+  }
 
   constructor(options: WebSocketOptions) {
     this.options = {
@@ -61,7 +63,6 @@ export class WebSocketManager {
       pingTimeout: 5000, // 5 seconds ping timeout
       maxMessageRetries: 3,
       messageRetryInterval: 1000,
-      shouldReconnect: () => true,
       onOpen: () => {},
       onClose: () => {},
       onError: () => {},
@@ -70,6 +71,10 @@ export class WebSocketManager {
       onReconnectFailed: () => {},
       ...options,
       protocols: options.protocols || [],
+      // Convert boolean to function or use provided function, default to true
+      shouldReconnect: typeof options.shouldReconnect === 'boolean'
+        ? () => options.shouldReconnect as boolean
+        : (options.shouldReconnect as ((_closeEvent: CloseEvent) => boolean) || (() => true)),
     }
   }
 
@@ -77,6 +82,7 @@ export class WebSocketManager {
     if (this.ws?.readyState === WebSocket.OPEN || this.isConnecting) {
       return
     }
+
 
     this.isConnecting = true
     this.shouldReconnect = true
@@ -88,7 +94,7 @@ export class WebSocketManager {
       // Set connection timeout
       this.connectionTimeoutTimer = setTimeout(() => {
         if (this.ws?.readyState === WebSocket.CONNECTING) {
-          console.warn('WebSocket connection timeout')
+          console.warn(`WebSocket connection timeout after ${this.options.connectionTimeout}ms`)
           this.ws.close()
         }
       }, this.options.connectionTimeout)
@@ -227,10 +233,15 @@ export class WebSocketManager {
 
     this.ws.onmessage = (_event: MessageEvent) => {
       // Handle heartbeat responses
-      if (_event.data === 'pong' || _event.data === this.options.heartbeatMessage) {
-        this.clearPingTimeout()
-        this.isWaitingForPong = false
-        return
+      try {
+        const data = JSON.parse(_event.data)
+        if (data.type === 'PONG') {
+          this.clearPingTimeout()
+          this.isWaitingForPong = false
+          return
+        }
+      } catch {
+        // Not JSON, ignore
       }
 
       this.options.onMessage(_event)
