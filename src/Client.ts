@@ -81,20 +81,22 @@ type SubscribeData = {
 
 /* eslint-disable no-unused-vars */
 enum WebsocketMessage {
+  PING = 'PING',
+  PONG = 'PONG',
   SUBSCRIBE = 'SUBSCRIBE',
   SUBSCRIPTION_SUCCEEDED = 'SUBSCRIPTION_SUCCEEDED',
   IN_APP_NOTIFICATION = 'IN_APP_NOTIFICATION',
-  PING = 'PING',
-  PONG = 'PONG',
+  PRODUCT_VARIANT_RELEASE_RULE_UPDATED = 'PRODUCT_VARIANT_RELEASE_RULE_UPDATED',
 }
 /* eslint-enable no-unused-vars */
 
 type WebsocketMessageType =
+  | { type: WebsocketMessage.PING }
+  | { type: WebsocketMessage.PONG }
   | { type: WebsocketMessage.SUBSCRIBE, data: SubscribeData }
   | { type: WebsocketMessage.SUBSCRIPTION_SUCCEEDED, data: SubscriptionSucceededData }
   | { type: WebsocketMessage.IN_APP_NOTIFICATION, data: InAppNotificationData }
-  | { type: WebsocketMessage.PING }
-  | { type: WebsocketMessage.PONG }
+  | { type: WebsocketMessage.PRODUCT_VARIANT_RELEASE_RULE_UPDATED, data: ProductVariantReleaseRule }
 
 type OptionalTimestampTrackNotificationInput = Omit<TrackNotificationInput, 'timestamp'> & { timestamp?: Pick<TrackNotificationInput, 'timestamp'> }
 
