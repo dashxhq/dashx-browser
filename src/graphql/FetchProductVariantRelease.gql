@@ -1,0 +1,5 @@
+query FetchProductVariantRelease($input: FetchProductVariantReleaseInput!) {
+  productVariantRelease: fetchProductVariantRelease(input: $input) {
+    ...ProductVariantReleaseFragment
+  }
+}

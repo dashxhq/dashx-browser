@@ -8,5 +8,17 @@ query FetchProductVariantReleaseRule($input: FetchProductVariantReleaseRuleInput
     autoRecommendNewReleases
     createdAt
     updatedAt
+
+    minimumRelease {
+      ...ProductVariantReleaseFragment
+    }
+
+    recommendedRelease {
+      ...ProductVariantReleaseFragment
+    }
+
+    latestRelease {
+      ...ProductVariantReleaseFragment
+    }
   }
 }

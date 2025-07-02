@@ -1,0 +1,9 @@
+fragment ProductVariantReleaseFragment on ProductVariantRelease {
+  id
+  productVariantId
+  versionName
+  versionNumber
+  releaseNotes
+  createdAt
+  updatedAt
+}
