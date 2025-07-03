@@ -14,6 +14,7 @@ import {
   FetchContactsDocument,
   FetchInAppNotificationsAggregateDocument,
   FetchInAppNotificationsDocument,
+  FetchProductVariantReleaseDocument,
   FetchProductVariantReleaseRuleDocument,
   FetchRecordDocument,
   FetchStoredPreferencesDocument,
@@ -31,6 +32,7 @@ import type {
   ContactStubInput,
   FetchInAppNotificationsQuery,
   FetchProductVariantReleaseRuleQuery,
+  FetchProductVariantReleaseQuery,
   SystemContextInput,
   TrackEventInput,
   TrackNotificationInput,
@@ -53,6 +55,7 @@ type ClientParams = {
   publicKey: string,
   targetEnvironment: string,
   targetProduct?: string,
+  targetVersion?: string
 }
 
 type IdentifyParams = Record<string, any>
@@ -72,6 +75,8 @@ type InAppNotifications = FetchInAppNotificationsQuery['notifications']
 type InAppNotificationData = Pick<FetchInAppNotificationsQuery['notifications'][0], 'id' | 'readAt' | 'renderedContent' | 'sentAt'>
 
 type ProductVariantReleaseRule = FetchProductVariantReleaseRuleQuery['productVariantReleaseRule']
+
+type ProductVariantRelease = FetchProductVariantReleaseQuery['productVariantRelease']
 
 type SubscribeData = {
   accountUid?: string | null,
@@ -125,6 +130,8 @@ class Client {
 
   targetProduct?: string
 
+  targetVersion?: string
+
   context: SystemContextInput
 
   constructor({
@@ -133,12 +140,14 @@ class Client {
     realtimeBaseUri = 'wss://realtime.dashx.com',
     targetEnvironment,
     targetProduct,
+    targetVersion
   }: ClientParams) {
     this.baseUri = baseUri
     this.realtimeBaseUri = realtimeBaseUri
     this.publicKey = publicKey
     this.targetEnvironment = targetEnvironment
     this.targetProduct = targetProduct
+    this.targetVersion = targetVersion
     this.context = generateContext()
     this.loadIdentity()
     this.initGraphqlClient()
@@ -752,6 +761,26 @@ class Client {
     return response?.data?.asset
   }
 
+  async fetchProductVariantRelease(): Promise<ProductVariantRelease> {
+    if (!this.targetVersion) {
+      throw new Error('`targetVersion` must be set when initializing the client')
+    }
+
+    const variables = {
+      input: {
+        targetVersion: this.targetVersion,
+        targetEnvironment: this.targetEnvironment,
+      },
+    }
+
+    const response = await this.graphqlClient.query({
+      query: FetchProductVariantReleaseDocument,
+      variables,
+    })
+
+    return response?.data?.productVariantRelease
+  }
+
   async fetchProductVariantReleaseRule(): Promise<ProductVariantReleaseRule> {
     if (!this.targetProduct) {
       throw new Error('`targetProduct` must be set when initializing the client')
@@ -984,4 +1013,4 @@ class Client {
 
 export default Client
 export { WebsocketMessage, DASHX_CLOSE_CODES }
-export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule }
+export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule, ProductVariantRelease }

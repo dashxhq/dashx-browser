@@ -6,6 +6,7 @@ import { resolve } from 'path'
 
 export default defineConfig({
   build: {
+    target: 'es2015',
     lib: {
       entry: resolve(__dirname, './src/index.ts'),
       name: 'dashx-browser',
