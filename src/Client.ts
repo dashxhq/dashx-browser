@@ -76,6 +76,8 @@ type InAppNotificationData = Pick<FetchInAppNotificationsQuery['notifications'][
 
 type ProductVariantReleaseRule = FetchProductVariantReleaseRuleQuery['productVariantReleaseRule']
 
+type ProductVariantRelease = ProductVariantReleaseFragmentFragment
+
 type SubscribeData = {
   accountUid?: string | null,
   accountAnonymousUid?: string | null,
@@ -759,7 +761,7 @@ class Client {
     return response?.data?.asset
   }
 
-  async fetchProductVariantRelease(): Promise<ProductVariantReleaseFragmentFragment> {
+  async fetchProductVariantRelease(): Promise<ProductVariantRelease> {
     if (!this.targetVersion) {
       throw new Error('`targetVersion` must be set when initializing the client')
     }
@@ -1011,4 +1013,4 @@ class Client {
 
 export default Client
 export { WebsocketMessage, DASHX_CLOSE_CODES }
-export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule, ProductVariantReleaseFragmentFragment as ProductVariantRelease }
+export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule, ProductVariantRelease }
