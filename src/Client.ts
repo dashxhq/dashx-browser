@@ -759,7 +759,7 @@ class Client {
     return response?.data?.asset
   }
 
-  async fetchProductVarianRelease(): Promise<ProductVariantReleaseFragmentFragment> {
+  async fetchProductVariantRelease(): Promise<ProductVariantReleaseFragmentFragment> {
     if (!this.targetVersion) {
       throw new Error('`targetVersion` must be set when initializing the client')
     }
@@ -1011,4 +1011,4 @@ class Client {
 
 export default Client
 export { WebsocketMessage, DASHX_CLOSE_CODES }
-export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule }
+export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule, ProductVariantReleaseFragmentFragment as ProductVariantRelease }
