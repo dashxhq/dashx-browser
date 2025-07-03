@@ -14,6 +14,7 @@ import {
   FetchContactsDocument,
   FetchInAppNotificationsAggregateDocument,
   FetchInAppNotificationsDocument,
+  FetchProductVariantReleaseDocument,
   FetchProductVariantReleaseRuleDocument,
   FetchRecordDocument,
   FetchStoredPreferencesDocument,
@@ -31,6 +32,7 @@ import type {
   ContactStubInput,
   FetchInAppNotificationsQuery,
   FetchProductVariantReleaseRuleQuery,
+  ProductVariantReleaseFragmentFragment,
   SystemContextInput,
   TrackEventInput,
   TrackNotificationInput,
@@ -53,6 +55,7 @@ type ClientParams = {
   publicKey: string,
   targetEnvironment: string,
   targetProduct?: string,
+  targetVersion?: string
 }
 
 type IdentifyParams = Record<string, any>
@@ -125,6 +128,8 @@ class Client {
 
   targetProduct?: string
 
+  targetVersion?: string
+
   context: SystemContextInput
 
   constructor({
@@ -133,12 +138,14 @@ class Client {
     realtimeBaseUri = 'wss://realtime.dashx.com',
     targetEnvironment,
     targetProduct,
+    targetVersion
   }: ClientParams) {
     this.baseUri = baseUri
     this.realtimeBaseUri = realtimeBaseUri
     this.publicKey = publicKey
     this.targetEnvironment = targetEnvironment
     this.targetProduct = targetProduct
+    this.targetVersion = targetVersion
     this.context = generateContext()
     this.loadIdentity()
     this.initGraphqlClient()
@@ -750,6 +757,26 @@ class Client {
     const response = await this.graphqlClient.query({ query: AssetDocument, variables })
 
     return response?.data?.asset
+  }
+
+  async fetchProductVarianRelease(): Promise<ProductVariantReleaseFragmentFragment> {
+    if (!this.targetVersion) {
+      throw new Error('`targetVersion` must be set when initializing the client')
+    }
+
+    const variables = {
+      input: {
+        targetVersion: this.targetVersion,
+        targetEnvironment: this.targetEnvironment,
+      },
+    }
+
+    const response = await this.graphqlClient.query({
+      query: FetchProductVariantReleaseDocument,
+      variables,
+    })
+
+    return response?.data?.productVariantRelease
   }
 
   async fetchProductVariantReleaseRule(): Promise<ProductVariantReleaseRule> {
