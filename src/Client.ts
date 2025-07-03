@@ -32,7 +32,7 @@ import type {
   ContactStubInput,
   FetchInAppNotificationsQuery,
   FetchProductVariantReleaseRuleQuery,
-  ProductVariantReleaseFragmentFragment,
+  FetchProductVariantReleaseQuery,
   SystemContextInput,
   TrackEventInput,
   TrackNotificationInput,
@@ -76,7 +76,7 @@ type InAppNotificationData = Pick<FetchInAppNotificationsQuery['notifications'][
 
 type ProductVariantReleaseRule = FetchProductVariantReleaseRuleQuery['productVariantReleaseRule']
 
-type ProductVariantRelease = ProductVariantReleaseFragmentFragment
+type ProductVariantRelease = FetchProductVariantReleaseQuery['productVariantRelease']
 
 type SubscribeData = {
   accountUid?: string | null,
