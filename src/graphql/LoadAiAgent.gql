@@ -1,0 +1,13 @@
+query LoadAiAgent($input: LoadAiAgentInput!) {
+  loadAiAgent(input: $input) {
+    id
+    name
+    identifier
+    avatar
+    versionId
+    starterMessages
+    starterSuggestions
+    status
+    interactionMode
+  }
+}

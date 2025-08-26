@@ -19,6 +19,7 @@ import {
   FetchRecordDocument,
   FetchStoredPreferencesDocument,
   IdentifyAccountDocument,
+  LoadAiAgentDocument,
   PrepareAssetDocument,
   RemoveCouponFromCartDocument,
   SaveContactsDocument,
@@ -36,6 +37,8 @@ import type {
   SystemContextInput,
   TrackEventInput,
   TrackNotificationInput,
+  LoadAiAgentQuery,
+  LoadAiAgentInput,
 } from './generated'
 
 const UPLOAD_RETRY_LIMIT = 5
@@ -77,6 +80,8 @@ type InAppNotificationData = Pick<FetchInAppNotificationsQuery['notifications'][
 type ProductVariantReleaseRule = FetchProductVariantReleaseRuleQuery['productVariantReleaseRule']
 
 type ProductVariantRelease = FetchProductVariantReleaseQuery['productVariantRelease']
+
+type AiAgent = LoadAiAgentQuery['loadAiAgent']
 
 type SubscribeData = {
   accountUid?: string | null,
@@ -781,6 +786,28 @@ class Client {
     return response?.data?.productVariantRelease
   }
 
+  async loadAiAgent({agent,publicEmbedKey}: Pick<LoadAiAgentInput, 'agent' | 'publicEmbedKey'>): Promise<AiAgent> {
+    if (!agent) {
+      throw new Error('`agent` must be specified')
+    }
+    if (!publicEmbedKey) {
+      throw new Error('`publicEmbedKey` must be specified')
+    }
+    const variables = {
+      input: {
+        agent,
+        publicEmbedKey,
+        targetEnvironment: this.targetEnvironment,
+      },
+    }
+    const response = await this.graphqlClient.query({
+      query: LoadAiAgentDocument,
+      variables,
+    })
+
+    return response?.data?.loadAiAgent
+  }
+
   async fetchProductVariantReleaseRule(): Promise<ProductVariantReleaseRule> {
     if (!this.targetProduct) {
       throw new Error('`targetProduct` must be set when initializing the client')
@@ -1013,4 +1040,4 @@ class Client {
 
 export default Client
 export { WebsocketMessage, DASHX_CLOSE_CODES }
-export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule, ProductVariantRelease }
+export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule, ProductVariantRelease, AiAgent }
