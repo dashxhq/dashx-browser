@@ -19,6 +19,7 @@ import {
   FetchRecordDocument,
   FetchStoredPreferencesDocument,
   IdentifyAccountDocument,
+  InvokeAiAgentDocument,
   LoadAiAgentDocument,
   PrepareAssetDocument,
   RemoveCouponFromCartDocument,
@@ -32,13 +33,15 @@ import {
 import type {
   ContactStubInput,
   FetchInAppNotificationsQuery,
-  FetchProductVariantReleaseRuleQuery,
   FetchProductVariantReleaseQuery,
+  FetchProductVariantReleaseRuleQuery,
+  InvokeAiAgentInput,
+  InvokeAiAgentQuery,
+  LoadAiAgentInput,
+  LoadAiAgentQuery,
   SystemContextInput,
   TrackEventInput,
   TrackNotificationInput,
-  LoadAiAgentQuery,
-  LoadAiAgentInput,
 } from './generated'
 
 const UPLOAD_RETRY_LIMIT = 5
@@ -83,6 +86,8 @@ type ProductVariantRelease = FetchProductVariantReleaseQuery['productVariantRele
 
 type AiAgent = LoadAiAgentQuery['loadAiAgent']
 
+type AiMessage = InvokeAiAgentQuery['invokeAiAgent']
+
 type SubscribeData = {
   accountUid?: string | null,
   accountAnonymousUid?: string | null,
@@ -119,7 +124,7 @@ class Client {
 
   #websocketManager: WebSocketManager | null = null
 
-  #notificationCallbacks: Set<(notification: InAppNotificationData) => void> = new Set()
+  #notificationCallbacks: Set<(_notification: InAppNotificationData) => void> = new Set()
 
   #watchedQueries: Set<{ refetch: () => void; name: string }> = new Set()
 
@@ -808,6 +813,33 @@ class Client {
     return response?.data?.loadAiAgent
   }
 
+  async invokeAiAgent({agent, conversationId, prompt, publicEmbedKey}: Pick<InvokeAiAgentInput, 'agent' | 'conversationId' | 'prompt' | 'publicEmbedKey'>): Promise<AiMessage> {
+    if (!agent) {
+      throw new Error('`agent` must be specified')
+    }
+    if (!prompt) {
+      throw new Error('`prompt` must be specified')
+    }
+    if (!publicEmbedKey) {
+      throw new Error('`publicEmbedKey` must be specified')
+    }
+    const variables = {
+      input: {
+        agent,
+        conversationId,
+        prompt,
+        publicEmbedKey,
+        targetEnvironment: this.targetEnvironment,
+      },
+    }
+
+    const response = await this.graphqlClient.query({
+      query: InvokeAiAgentDocument,
+      variables,
+    })
+    return response?.data?.invokeAiAgent
+  }
+
   async fetchProductVariantReleaseRule(): Promise<ProductVariantReleaseRule> {
     if (!this.targetProduct) {
       throw new Error('`targetProduct` must be set when initializing the client')
@@ -897,7 +929,7 @@ class Client {
   }
 
   // Notification callback management
-  onNotification(callback: (notification: InAppNotificationData) => void): () => void {
+  onNotification(callback: (_notification: InAppNotificationData) => void): () => void {
     this.#notificationCallbacks.add(callback)
 
     // Return unsubscribe function
@@ -1040,4 +1072,4 @@ class Client {
 
 export default Client
 export { WebsocketMessage, DASHX_CLOSE_CODES }
-export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule, ProductVariantRelease, AiAgent }
+export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiMessage }
