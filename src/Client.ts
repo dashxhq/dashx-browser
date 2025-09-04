@@ -88,6 +88,15 @@ type AiAgent = LoadAiAgentQuery['loadAiAgent']
 
 type AiMessage = InvokeAiAgentQuery['invokeAiAgent']
 
+type AiAgentStarterMessage = {
+  content: string
+}
+
+type AiAgentStarterSuggestion = {
+  label?: string,
+  content: string
+}
+
 type SubscribeData = {
   accountUid?: string | null,
   accountAnonymousUid?: string | null,
@@ -798,6 +807,7 @@ class Client {
     if (!publicEmbedKey) {
       throw new Error('`publicEmbedKey` must be specified')
     }
+
     const variables = {
       input: {
         agent,
@@ -805,10 +815,15 @@ class Client {
         targetEnvironment: this.targetEnvironment,
       },
     }
+
     const response = await this.graphqlClient.query({
       query: LoadAiAgentDocument,
       variables,
     })
+
+    if (response?.errors && response.errors.length > 0) {
+      throw new Error(response.errors[0].message || 'Failed to load AI agent')
+    }
 
     return response?.data?.loadAiAgent
   }
@@ -823,6 +838,7 @@ class Client {
     if (!publicEmbedKey) {
       throw new Error('`publicEmbedKey` must be specified')
     }
+  
     const variables = {
       input: {
         agent,
@@ -837,6 +853,11 @@ class Client {
       query: InvokeAiAgentDocument,
       variables,
     })
+
+    if (response?.errors && response.errors.length > 0) {
+      throw new Error(response.errors[0].message || 'Failed to invoke AI agent')
+    }
+  
     return response?.data?.invokeAiAgent
   }
 
@@ -1072,4 +1093,4 @@ class Client {
 
 export default Client
 export { WebsocketMessage, DASHX_CLOSE_CODES }
-export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiMessage }
+export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiMessage, AiAgentStarterMessage, AiAgentStarterSuggestion }
