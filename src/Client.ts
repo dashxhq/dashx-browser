@@ -800,17 +800,13 @@ class Client {
     return response?.data?.productVariantRelease
   }
 
-  async loadAiAgent({agent,publicEmbedKey}: Pick<LoadAiAgentInput, 'agent' | 'publicEmbedKey'>): Promise<AiAgent> {
-    if (!agent) {
-      throw new Error('`agent` must be specified')
-    }
+  async loadAiAgent({publicEmbedKey}: Pick<LoadAiAgentInput, 'publicEmbedKey'>): Promise<AiAgent> {
     if (!publicEmbedKey) {
       throw new Error('`publicEmbedKey` must be specified')
     }
 
     const variables = {
       input: {
-        agent,
         publicEmbedKey,
         targetEnvironment: this.targetEnvironment,
       },
@@ -828,10 +824,7 @@ class Client {
     return response?.data?.loadAiAgent
   }
 
-  async invokeAiAgent({agent, conversationId, prompt, publicEmbedKey}: Pick<InvokeAiAgentInput, 'agent' | 'conversationId' | 'prompt' | 'publicEmbedKey'>): Promise<AiMessage> {
-    if (!agent) {
-      throw new Error('`agent` must be specified')
-    }
+  async invokeAiAgent({conversationId, prompt, publicEmbedKey}: Pick<InvokeAiAgentInput, 'conversationId' | 'prompt' | 'publicEmbedKey'>): Promise<AiMessage> {
     if (!prompt) {
       throw new Error('`prompt` must be specified')
     }
@@ -841,7 +834,6 @@ class Client {
   
     const variables = {
       input: {
-        agent,
         conversationId,
         prompt,
         publicEmbedKey,

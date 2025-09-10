@@ -150,7 +150,6 @@ export type IdentifyAccountInput = {
 };
 
 export type InvokeAiAgentInput = {
-  agent: Scalars['String']['input'];
   conversationId?: InputMaybe<Scalars['UUID']['input']>;
   prompt: Scalars['String']['input'];
   publicEmbedKey: Scalars['String']['input'];
@@ -158,7 +157,6 @@ export type InvokeAiAgentInput = {
 };
 
 export type LoadAiAgentInput = {
-  agent: Scalars['String']['input'];
   publicEmbedKey: Scalars['String']['input'];
   targetEnvironment?: InputMaybe<Scalars['String']['input']>;
 };
