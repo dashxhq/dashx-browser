@@ -1,0 +1,14 @@
+query InvokeAiAgent($input: InvokeAiAgentInput!) {
+  invokeAiAgent(input: $input) {
+    id
+    workspaceId
+    conversationId
+    senderId
+    role
+    content
+    metadata
+    rawBody
+    createdAt
+    updatedAt 
+  }
+}
