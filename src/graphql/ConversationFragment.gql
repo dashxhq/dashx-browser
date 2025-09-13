@@ -1,0 +1,13 @@
+fragment ConversationFragment on Conversation {
+  id
+  workspaceId
+  kind
+  name
+  channel
+  subChannel
+  createdAt
+  updatedAt
+  notifications {
+    ...NotificationFragment
+  }
+}

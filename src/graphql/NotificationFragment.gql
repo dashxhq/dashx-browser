@@ -1,0 +1,25 @@
+fragment NotificationFragment on Notification {
+    id
+    attachments
+    deliveryId
+    integrationId
+    data
+    renderedContent
+    report
+    failedSendAttempts
+    failedDeliveryAttempts
+    lastDeliveryFailureAt
+    lastSendFailureAt
+    failureReason
+    unsubscribedAt
+    firstClickedAt
+    complainedAt
+    failedAt
+    sentAt
+    deliveredAt
+    firstOpenedAt
+    externalUid
+    queuedAt
+    createdAt
+    updatedAt
+}

@@ -1,0 +1,5 @@
+query ConversationsList($filter: JSON, $limit: Int, $order: [JSON!], $page: Int) {
+  conversationsList(filter: $filter, limit: $limit, order: $order, page: $page) {
+    ...ConversationFragment
+  }
+}

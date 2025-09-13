@@ -10,6 +10,7 @@ import {
   AddItemToCartDocument,
   ApplyCouponToCartDocument,
   AssetDocument,
+  ConversationFragmentFragment,
   FetchCartDocument,
   FetchContactsDocument,
   FetchInAppNotificationsAggregateDocument,
@@ -21,6 +22,7 @@ import {
   IdentifyAccountDocument,
   InvokeAiAgentDocument,
   LoadAiAgentDocument,
+  NotificationFragmentFragment,
   PrepareAssetDocument,
   RemoveCouponFromCartDocument,
   SaveContactsDocument,
@@ -101,6 +103,7 @@ type SubscribeData = {
   accountUid?: string | null,
   accountAnonymousUid?: string | null,
   targetProduct?: string | null,
+  channelName?: string | null
 }
 
 /* eslint-disable no-unused-vars */
@@ -111,6 +114,8 @@ enum WebsocketMessage {
   SUBSCRIPTION_SUCCEEDED = 'SUBSCRIPTION_SUCCEEDED',
   IN_APP_NOTIFICATION = 'IN_APP_NOTIFICATION',
   PRODUCT_VARIANT_RELEASE_RULE_UPDATED = 'PRODUCT_VARIANT_RELEASE_RULE_UPDATED',
+  NEW_INBOX_CONVERSATION_CREATED = 'NEW_INBOX_CONVERSATION_CREATED',
+  NEW_INBOX_MESSAGE_RECEIVED = 'NEW_INBOX_MESSAGE_RECEIVED'
 }
 /* eslint-enable no-unused-vars */
 
@@ -121,6 +126,8 @@ type WebsocketMessageType =
   | { type: WebsocketMessage.SUBSCRIPTION_SUCCEEDED, data: SubscriptionSucceededData }
   | { type: WebsocketMessage.IN_APP_NOTIFICATION, data: InAppNotificationData }
   | { type: WebsocketMessage.PRODUCT_VARIANT_RELEASE_RULE_UPDATED, data: ProductVariantReleaseRule }
+  | { type: WebsocketMessage.NEW_INBOX_CONVERSATION_CREATED, data: ConversationFragmentFragment }
+  | { type: WebsocketMessage.NEW_INBOX_MESSAGE_RECEIVED, data: NotificationFragmentFragment }
 
 type OptionalTimestampTrackNotificationInput = Omit<TrackNotificationInput, 'timestamp'> & { timestamp?: Pick<TrackNotificationInput, 'timestamp'> }
 
