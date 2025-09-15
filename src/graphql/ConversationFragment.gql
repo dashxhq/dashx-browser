@@ -5,6 +5,8 @@ fragment ConversationFragment on Conversation {
   name
   channel
   subChannel
+  environmentId
+  idempotencyKey
   createdAt
   updatedAt
   notifications {
