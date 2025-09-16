@@ -2,6 +2,7 @@ fragment NotificationFragment on Notification {
     id
     attachments
     deliveryId
+    conversationId
     integrationId
     data
     renderedContent
