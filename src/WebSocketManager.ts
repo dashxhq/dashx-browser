@@ -264,11 +264,11 @@ export class WebSocketManager {
     this.options.onReconnect(this.reconnectAttempts)
 
     // Exponential backoff with jitter
-    const baseDelay = this.options.reconnectInterval
-    const maxDelay = 30000 // 30 seconds max
-    const exponentialDelay = Math.min(baseDelay * Math.pow(2, this.reconnectAttempts - 1), maxDelay)
-    const jitter = Math.random() * 1000 // Add up to 1 second of jitter
-    const finalDelay = exponentialDelay + jitter
+    // const baseDelay = this.options.reconnectInterval
+    // const maxDelay = 30000 // 30 seconds max
+    // const exponentialDelay = Math.min(baseDelay * Math.pow(2, this.reconnectAttempts - 1), maxDelay)
+    // const jitter = Math.random() * 1000 // Add up to 1 second of jitter
+    const finalDelay = 2000
 
     console.log(`Scheduling reconnect attempt ${this.reconnectAttempts} in ${Math.round(finalDelay)}ms`)
 
