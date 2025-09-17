@@ -88,7 +88,7 @@ type ProductVariantRelease = FetchProductVariantReleaseQuery['productVariantRele
 
 type AiAgent = LoadAiAgentQuery['loadAiAgent']
 
-type AiMessage = InvokeAiAgentQuery['invokeAiAgent']
+type AiNotification = InvokeAiAgentQuery['invokeAiAgent']
 
 type AiAgentStarterMessage = {
   content: string
@@ -831,7 +831,7 @@ class Client {
     return response?.data?.loadAiAgent
   }
 
-  async invokeAiAgent({conversationId, prompt, publicEmbedKey}: Pick<InvokeAiAgentInput, 'conversationId' | 'prompt' | 'publicEmbedKey'>): Promise<AiMessage> {
+  async invokeAiAgent({conversationId, prompt, publicEmbedKey}: Pick<InvokeAiAgentInput, 'conversationId' | 'prompt' | 'publicEmbedKey'>): Promise<AiNotification> {
     if (!prompt) {
       throw new Error('`prompt` must be specified')
     }
@@ -1092,4 +1092,4 @@ class Client {
 
 export default Client
 export { WebsocketMessage, DASHX_CLOSE_CODES }
-export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiMessage, AiAgentStarterMessage, AiAgentStarterSuggestion }
+export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiNotification, AiAgentStarterMessage, AiAgentStarterSuggestion }
