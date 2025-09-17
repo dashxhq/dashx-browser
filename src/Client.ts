@@ -1083,6 +1083,10 @@ class Client {
         // Notify all registered callbacks
         this.notifyCallbacks(_message.data)
         break
+      
+      case WebsocketMessage.PLANNER_INBOX_CONVERSATION_CREATED:
+      case WebsocketMessage.PRODUCT_VARIANT_RELEASE_RULE_UPDATED:
+        break
 
       default:
         console.warn('Unknown WebSocket message type:', _message.type)
