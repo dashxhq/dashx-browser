@@ -490,7 +490,7 @@ class Client {
 
     observableQuery.subscribe({
       next(_response) {
-        callback(_response.data.notifications)
+        callback(_response.data?.notifications)
       },
       error(_err) {
         console.error(_err)
@@ -525,7 +525,7 @@ class Client {
 
     observableQuery.subscribe({
       next(_response) {
-        callback(_response.data.notificationsAggregate.count || 0)
+        callback(_response.data?.notificationsAggregate.count || 0)
       },
       error(_err) {
         console.error(_err)
