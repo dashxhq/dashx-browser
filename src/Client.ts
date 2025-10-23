@@ -1,5 +1,5 @@
 import uuid from 'uuid-random'
-import { ApolloCache, ApolloClient, ApolloLink, HttpLink, InMemoryCache, NormalizedCacheObject, gql } from '@apollo/client'
+import { ApolloCache, ApolloClient, ApolloLink, HttpLink, InMemoryCache, NormalizedCacheObject, gql } from '@apollo/client/core'
 import { setContext } from '@apollo/client/link/context'
 
 import SearchRecordsInputBuilder, { FetchRecordsOptions, SearchRecordsOptions } from './SearchRecordsInputBuilder'
@@ -904,7 +904,7 @@ class Client {
 
     observableQuery.subscribe({
       next(_response) {
-        callback(_response.data.productVariantReleaseRule)
+        callback(_response.data?.productVariantReleaseRule)
       },
       error(_err) {
         console.error(_err)
