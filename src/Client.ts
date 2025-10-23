@@ -933,8 +933,16 @@ class Client {
   }
 
   // Register a watched query for automatic refetch on WebSocket reconnection
-  private registerWatchedQuery(refetch: () => void, name: string): void {
+  registerWatchedQuery(refetch: () => void, name: string): void {
     this.#watchedQueries.add({ refetch, name })
+  }
+
+  unregisterWatchedQuery(name: string): void {
+    this.#watchedQueries.forEach((query) => {
+      if (query.name === name) {
+        this.#watchedQueries.delete(query)
+      }
+    })
   }
 
   // Trigger refetch of all watched queries
