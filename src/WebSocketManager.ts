@@ -59,7 +59,7 @@ export class WebSocketManager {
     this.options = {
       reconnectInterval: 5000,
       maxReconnectAttempts: 20,
-      heartbeatInterval: 30000,
+      heartbeatInterval: 10000,
       heartbeatMessage: { type: WebsocketMessage.PING, data: { nonce: uuid() } },
       connectionTimeout: 10000, // 10 seconds connection timeout
       pingTimeout: 5000, // 5 seconds ping timeout
