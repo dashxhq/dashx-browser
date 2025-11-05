@@ -1,3 +1,5 @@
+import uuid from 'uuid-random'
+
 import { WebsocketMessage, WebsocketMessageType } from './Client'
 
 /* eslint-disable no-unused-vars */
@@ -58,7 +60,7 @@ export class WebSocketManager {
       reconnectInterval: 5000,
       maxReconnectAttempts: 20,
       heartbeatInterval: 30000,
-      heartbeatMessage: { type: WebsocketMessage.PING },
+      heartbeatMessage: { type: WebsocketMessage.PING, data: { nonce: uuid() } },
       connectionTimeout: 10000, // 10 seconds connection timeout
       pingTimeout: 5000, // 5 seconds ping timeout
       maxMessageRetries: 3,

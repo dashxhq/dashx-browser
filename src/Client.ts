@@ -99,6 +99,14 @@ type AiAgentStarterSuggestion = {
   content: string
 }
 
+type PingData = {
+  nonce: string
+}
+
+type PongData = {
+  nonce: string
+}
+
 type SubscribeData = {
   accountUid?: string | null,
   accountAnonymousUid?: string | null,
@@ -120,8 +128,8 @@ enum WebsocketMessage {
 /* eslint-enable no-unused-vars */
 
 type WebsocketMessageType =
-  | { type: WebsocketMessage.PING }
-  | { type: WebsocketMessage.PONG }
+  | { type: WebsocketMessage.PING, data: PingData }
+  | { type: WebsocketMessage.PONG, data: PongData }
   | { type: WebsocketMessage.SUBSCRIBE, data: SubscribeData }
   | { type: WebsocketMessage.SUBSCRIPTION_SUCCEEDED, data: SubscriptionSucceededData }
   | { type: WebsocketMessage.IN_APP_NOTIFICATION, data: InAppNotificationData }
@@ -838,7 +846,7 @@ class Client {
     if (!publicEmbedKey) {
       throw new Error('`publicEmbedKey` must be specified')
     }
-  
+
     const variables = {
       input: {
         conversationId,
@@ -856,7 +864,7 @@ class Client {
     if (response?.errors && response.errors.length > 0) {
       throw new Error(response.errors[0].message || 'Failed to invoke AI agent')
     }
-  
+
     return response?.data?.invokeAiAgent
   }
 
@@ -1091,7 +1099,7 @@ class Client {
         // Notify all registered callbacks
         this.notifyCallbacks(_message.data)
         break
-      
+
       case WebsocketMessage.PLANNER_INBOX_CONVERSATION_CREATED:
       case WebsocketMessage.PRODUCT_VARIANT_RELEASE_RULE_UPDATED:
         break
