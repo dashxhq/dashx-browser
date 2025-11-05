@@ -107,6 +107,10 @@ type PongData = {
   nonce: string
 }
 
+type ConnectionData = {
+  connectionId: string
+}
+
 type SubscribeData = {
   accountUid?: string | null,
   accountAnonymousUid?: string | null,
@@ -118,6 +122,7 @@ type SubscribeData = {
 enum WebsocketMessage {
   PING = 'PING',
   PONG = 'PONG',
+  CONNECTED = 'CONNECTED',
   SUBSCRIBE = 'SUBSCRIBE',
   SUBSCRIPTION_SUCCEEDED = 'SUBSCRIPTION_SUCCEEDED',
   IN_APP_NOTIFICATION = 'IN_APP_NOTIFICATION',
@@ -130,6 +135,7 @@ enum WebsocketMessage {
 type WebsocketMessageType =
   | { type: WebsocketMessage.PING, data: PingData }
   | { type: WebsocketMessage.PONG, data: PongData }
+  | { type: WebsocketMessage.CONNECTED, data: ConnectionData }
   | { type: WebsocketMessage.SUBSCRIBE, data: SubscribeData }
   | { type: WebsocketMessage.SUBSCRIPTION_SUCCEEDED, data: SubscriptionSucceededData }
   | { type: WebsocketMessage.IN_APP_NOTIFICATION, data: InAppNotificationData }
