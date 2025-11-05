@@ -27,7 +27,8 @@ export interface WebSocketOptions {
   connectionTimeout?: number
   pingTimeout?: number
   maxMessageRetries?: number
-  messageRetryInterval?: number
+  messageRetryInterval?: number,
+  handleOnlineOffline?: boolean,
   shouldReconnect?: boolean | ((_closeEvent: CloseEvent) => boolean)
   onOpen?: (_event: Event) => void
   onClose?: (_event: CloseEvent) => void
@@ -50,6 +51,7 @@ export class WebSocketManager {
   private lastCloseEvent: CloseEvent | null = null
   private messageQueue: QueuedMessage[] = []
   private isWaitingForPong = false
+  private isNetworkOnline = true
 
   private options: Required<Omit<WebSocketOptions, 'shouldReconnect'>> & {
     shouldReconnect: (_closeEvent: CloseEvent) => boolean
@@ -65,6 +67,7 @@ export class WebSocketManager {
       pingTimeout: 5000, // 5 seconds ping timeout
       maxMessageRetries: 3,
       messageRetryInterval: 1000,
+      handleOnlineOffline: true,
       onOpen: () => {},
       onClose: () => {},
       onError: () => {},
@@ -78,6 +81,67 @@ export class WebSocketManager {
         ? () => options.shouldReconnect as boolean
         : (options.shouldReconnect as ((_closeEvent: CloseEvent) => boolean) || (() => true)),
     }
+
+    // Set up browser lifecycle listeners
+    this.setupBrowserListeners()
+  }
+
+  private setupBrowserListeners(): void {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    // Handle network online/offline
+    if (this.options.handleOnlineOffline) {
+      window.addEventListener('online', this.handleOnline)
+      window.addEventListener('offline', this.handleOffline)
+    }
+
+    // Handle page unload (browser close, navigation away)
+    window.addEventListener('beforeunload', this.handleBeforeUnload)
+  }
+
+  private removeBrowserListeners(): void {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    if (this.options.handleOnlineOffline) {
+      window.removeEventListener('online', this.handleOnline)
+      window.removeEventListener('offline', this.handleOffline)
+    }
+
+    window.removeEventListener('beforeunload', this.handleBeforeUnload)
+  }
+
+  private handleOnline = (): void => {
+    console.log('Network online - reconnecting')
+    this.isNetworkOnline = true
+
+    if (this.ws?.readyState !== WebSocket.OPEN) {
+      this.reconnectAttempts = 0
+      this.connect()
+    }
+  }
+
+  private handleOffline = (): void => {
+    console.log('Network offline - connection lost')
+    this.isNetworkOnline = false
+    this.stopHeartbeat()
+
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+  }
+
+  private handleBeforeUnload = (): void => {
+    console.log('Page unloading - closing connection')
+    this.shouldReconnect = false
+
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.close()
+    }
   }
 
   connect(): void {
@@ -85,6 +149,11 @@ export class WebSocketManager {
       return
     }
 
+    // Don't try to connect if network is offline
+    if (!this.isNetworkOnline) {
+      console.log('Network offline - deferring connection attempt')
+      return
+    }
 
     this.isConnecting = true
     this.shouldReconnect = true
@@ -112,6 +181,7 @@ export class WebSocketManager {
     this.shouldReconnect = false
     this.clearTimers()
     this.messageQueue = []
+    this.removeBrowserListeners()
 
     if (this.ws) {
       this.ws.close()
@@ -253,6 +323,12 @@ export class WebSocketManager {
   private scheduleReconnect(): void {
     if (!this.shouldReconnect || this.reconnectAttempts >= this.options.maxReconnectAttempts) {
       this.options.onReconnectFailed()
+      return
+    }
+
+    // Don't reconnect if network is offline
+    if (!this.isNetworkOnline) {
+      console.log('Network offline - skipping reconnect attempt')
       return
     }
 
