@@ -1,7 +1,7 @@
 {
   "name": "@dashx/browser",
   "title": "dashx-browser",
-  "version": "0.4.13",
+  "version": "0.4.14",
   "description": "DashX SDK for Browser",
   "type": "module",
   "files": [
