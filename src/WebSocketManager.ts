@@ -29,6 +29,7 @@ export interface WebSocketOptions {
   maxMessageRetries?: number
   messageRetryInterval?: number,
   handleOnlineOffline?: boolean,
+  handleVisibilityChange?: boolean,
   shouldReconnect?: boolean | ((_closeEvent: CloseEvent) => boolean)
   onOpen?: (_event: Event) => void
   onClose?: (_event: CloseEvent) => void
@@ -52,6 +53,8 @@ export class WebSocketManager {
   private messageQueue: QueuedMessage[] = []
   private isWaitingForPong = false
   private isNetworkOnline = true
+  private isPageVisible = true
+  private missedMessagesWhileHidden = 0
 
   private options: Required<Omit<WebSocketOptions, 'shouldReconnect'>> & {
     shouldReconnect: (_closeEvent: CloseEvent) => boolean
@@ -68,6 +71,7 @@ export class WebSocketManager {
       maxMessageRetries: 3,
       messageRetryInterval: 1000,
       handleOnlineOffline: true,
+      handleVisibilityChange: true,
       onOpen: () => {},
       onClose: () => {},
       onError: () => {},
@@ -91,13 +95,15 @@ export class WebSocketManager {
       return
     }
 
-    // Handle network online/offline
     if (this.options.handleOnlineOffline) {
       window.addEventListener('online', this.handleOnline)
       window.addEventListener('offline', this.handleOffline)
     }
 
-    // Handle page unload (browser close, navigation away)
+    if (this.options.handleVisibilityChange) {
+      document.addEventListener('visibilitychange', this.handleVisibilityChange)
+    }
+
     window.addEventListener('beforeunload', this.handleBeforeUnload)
   }
 
@@ -109,6 +115,10 @@ export class WebSocketManager {
     if (this.options.handleOnlineOffline) {
       window.removeEventListener('online', this.handleOnline)
       window.removeEventListener('offline', this.handleOffline)
+    }
+
+    if (this.options.handleVisibilityChange) {
+      document.removeEventListener('visibilitychange', this.handleVisibilityChange)
     }
 
     window.removeEventListener('beforeunload', this.handleBeforeUnload)
@@ -132,6 +142,53 @@ export class WebSocketManager {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
+    }
+  }
+
+  private handleVisibilityChange = (): void => {
+    this.isPageVisible = !document.hidden
+
+    if (document.hidden) {
+      console.log('Page hidden - connection will continue but may be throttled')
+      this.missedMessagesWhileHidden = 0
+    } else {
+      console.log('Page visible again - verifying connection')
+
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        try {
+          console.log('Sending verification ping')
+          this.ws.send(JSON.stringify(this.options.heartbeatMessage))
+          this.isWaitingForPong = true
+
+          const verifyTimeout = setTimeout(() => {
+            if (this.isWaitingForPong && this.ws?.readyState === WebSocket.OPEN) {
+              console.warn('No pong received after page visible - reconnecting')
+              this.ws.close()
+            }
+          }, this.options.pingTimeout)
+
+          const checkInterval = setInterval(() => {
+            if (!this.isWaitingForPong) {
+              clearTimeout(verifyTimeout)
+              clearInterval(checkInterval)
+              console.log('Connection verified after page visible')
+              if (this.missedMessagesWhileHidden > 0) {
+                console.log(`Potentially missed ${this.missedMessagesWhileHidden} messages while hidden`)
+              }
+            }
+          }, 100)
+
+          setTimeout(() => {
+            clearInterval(checkInterval)
+          }, this.options.pingTimeout + 500)
+        } catch (error) {
+          console.error('Failed to send verification ping:', error)
+          this.connect()
+        }
+      } else {
+        console.warn('WebSocket not open after page visible - reconnecting')
+        this.connect()
+      }
     }
   }
 
