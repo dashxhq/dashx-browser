@@ -1,5 +1,3 @@
-import uuid from 'uuid-random'
-
 import { createLogger } from './logging'
 import { WebsocketMessage, WebsocketMessageType } from './Client'
 
@@ -63,12 +61,16 @@ export class WebSocketManager {
 
   private logger = createLogger('WEBSOCKET')
 
+  private rsName(state: ReadyState | undefined): string {
+    return state !== undefined ? ReadyState[state] : 'UNKNOWN'
+  }
+
   constructor(options: WebSocketOptions) {
     this.options = {
       reconnectInterval: 5000,
       maxReconnectAttempts: 20,
       heartbeatInterval: 10000,
-      heartbeatMessage: { type: WebsocketMessage.PING, data: { nonce: uuid() } },
+      heartbeatMessage: { type: WebsocketMessage.PING },
       connectionTimeout: 10000,
       pingTimeout: 5000,
       maxMessageRetries: 3,
@@ -128,7 +130,7 @@ export class WebSocketManager {
   }
 
   private handleOnline = (): void => {
-    this.logger.log('Network online - reconnecting')
+    this.logger.log(`Network online - reconnecting, readyState=${this.rsName(this.ws?.readyState)}`)
     this.isNetworkOnline = true
 
     if (this.ws?.readyState !== WebSocket.OPEN) {
@@ -141,6 +143,12 @@ export class WebSocketManager {
     this.logger.log('Network offline - connection lost')
     this.isNetworkOnline = false
     this.stopHeartbeat()
+
+    // mark not-connecting and force-close the socket to trigger onClose cleanup
+    this.isConnecting = false
+    if (this.ws && this.ws.readyState !== WebSocket.CLOSED) {
+      try { this.ws.close() } catch {}
+    }
 
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
@@ -205,17 +213,26 @@ export class WebSocketManager {
   }
 
   connect(): void {
-    if (this.ws?.readyState === WebSocket.OPEN || this.isConnecting) {
-      this.logger.log('Connection already established or in progress')
+    const rs = this.ws?.readyState
+
+    if (rs === WebSocket.OPEN) {
+      this.logger.log('connect(): skipped — ws is already OPEN')
       return
     }
-
+    if (this.isConnecting) {
+      this.logger.log('connect(): skipped — isConnecting=true (likely stale). readyState=', rs)
+      return
+    }
     if (!this.isNetworkOnline) {
-      this.logger.log('Network offline - deferring connection attempt')
+      this.logger.log('connect(): skipped — network offline')
       return
     }
 
-    this.logger.log('Connecting to WebSocket')
+    this.logger.log('connect(): proceeding — creating WebSocket', {
+      url: this.options.url,
+      protocols: this.options.protocols,
+    })
+
     this.isConnecting = true
     this.shouldReconnect = true
 
@@ -229,7 +246,11 @@ export class WebSocketManager {
       this.connectionTimeoutTimer = setTimeout(() => {
         if (this.ws?.readyState === WebSocket.CONNECTING) {
           this.logger.warn(`WebSocket connection timeout after ${this.options.connectionTimeout}ms`)
-          this.ws.close()
+          this.isConnecting = false
+          try {
+            this.ws.close()
+          } catch {
+          }
         }
       }, this.options.connectionTimeout)
 

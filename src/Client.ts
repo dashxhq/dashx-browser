@@ -100,14 +100,6 @@ type AiAgentStarterSuggestion = {
   content: string
 }
 
-type PingData = {
-  nonce: string
-}
-
-type PongData = {
-  nonce: string
-}
-
 type ConnectionData = {
   connectionId: string
 }
@@ -134,8 +126,8 @@ enum WebsocketMessage {
 /* eslint-enable no-unused-vars */
 
 type WebsocketMessageType =
-  | { type: WebsocketMessage.PING, data: PingData }
-  | { type: WebsocketMessage.PONG, data: PongData }
+  | { type: WebsocketMessage.PING }
+  | { type: WebsocketMessage.PONG }
   | { type: WebsocketMessage.CONNECTED, data: ConnectionData }
   | { type: WebsocketMessage.SUBSCRIBE, data: SubscribeData }
   | { type: WebsocketMessage.SUBSCRIPTION_SUCCEEDED, data: SubscriptionSucceededData }
