@@ -5,6 +5,7 @@ import { setContext } from '@apollo/client/link/context'
 import SearchRecordsInputBuilder, { FetchRecordsOptions, SearchRecordsOptions } from './SearchRecordsInputBuilder'
 import generateContext from './context'
 import WebSocketManager from './WebSocketManager'
+import { createLogger } from './logging'
 import { getItem, setItem } from './storage'
 import {
   AddItemToCartDocument,
@@ -173,6 +174,8 @@ class Client {
   targetVersion?: string
 
   context: SystemContextInput
+
+  private logger = createLogger('CLIENT')
 
   constructor({
     publicKey,
@@ -506,8 +509,8 @@ class Client {
       next(_response) {
         callback(_response.data?.notifications)
       },
-      error(_err) {
-        console.error(_err)
+      error: (_err) => {
+        this.logger.error(_err)
         callback([])
       },
     })
@@ -541,8 +544,8 @@ class Client {
       next(_response) {
         callback(_response.data?.notificationsAggregate.count || 0)
       },
-      error(_err) {
-        console.error(_err)
+      error: (_err) => {
+        this.logger.error(_err)
         callback(0)
       },
     })
@@ -920,8 +923,8 @@ class Client {
       next(_response) {
         callback(_response.data?.productVariantReleaseRule)
       },
-      error(_err) {
-        console.error(_err)
+      error: (_err) => {
+        this.logger.error(_err)
         callback(null)
       },
     })
@@ -965,7 +968,7 @@ class Client {
       try {
         refetch()
       } catch (error) {
-        console.error(`Error refetching ${name}:`, error)
+        this.logger.error(`Error refetching ${name}:`, error)
       }
     })
   }
@@ -985,7 +988,7 @@ class Client {
       try {
         callback(notification)
       } catch (error) {
-        console.error('Error in notification callback:', error)
+        this.logger.error('Error in notification callback:', error)
       }
     })
   }
@@ -1028,28 +1031,28 @@ class Client {
           this.handleWebSocketMessage(message)
           options?.onMessage?.(message)
         } catch (error) {
-          console.error('Error parsing WebSocket message:', error)
+          this.logger.error('Error parsing WebSocket message:', error)
         }
       },
       onClose: (event: CloseEvent) => {
         options?.onClose?.(event)
       },
       onError: (error) => {
-        console.error('WebSocket error:', error)
+        this.logger.error('WebSocket error:', error)
         options?.onError?.(error)
       },
       onReconnect: (attempt) => {
-        console.log(`WebSocket reconnecting... attempt ${attempt}`)
+        this.logger.log(`WebSocket reconnecting... attempt ${attempt}`)
         options?.onReconnect?.(attempt)
       },
       onReconnectFailed: () => {
-        console.error('WebSocket reconnection failed')
+        this.logger.error('WebSocket reconnection failed')
         options?.onReconnectFailed?.()
       },
       shouldReconnect: options?.shouldReconnect ?? ((closeEvent: CloseEvent) => {
         // Don't retry on DashX-specific error codes
         if (DASHX_CLOSE_CODES.includes(closeEvent.code as any)) {
-          console.warn(`WebSocket closed with DashX error code ${closeEvent.code}, not retrying`)
+          this.logger.warn(`WebSocket closed with DashX error code ${closeEvent.code}, not retrying`)
           return false
         }
         // Retry for other close codes (network issues, etc.)
@@ -1084,15 +1087,15 @@ class Client {
   private handleWebSocketMessage(_message: WebsocketMessageType): void {
     switch (_message.type) {
       case WebsocketMessage.PING:
-        console.log('Ping received')
+        this.logger.log('Ping received')
         break
 
       case WebsocketMessage.PONG:
-        console.log('Pong received')
+        this.logger.log('Pong received')
         break
 
       case WebsocketMessage.SUBSCRIPTION_SUCCEEDED:
-        console.log('Successfully subscribed to notifications')
+        this.logger.log('Successfully subscribed to notifications')
         break
 
       case WebsocketMessage.IN_APP_NOTIFICATION:
@@ -1111,7 +1114,7 @@ class Client {
         break
 
       default:
-        console.warn('Unknown WebSocket message type:', _message.type)
+        this.logger.warn('Unknown WebSocket message type:', _message.type)
     }
   }
 }

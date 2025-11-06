@@ -1,5 +1,6 @@
 import uuid from 'uuid-random'
 
+import { createLogger } from './logging'
 import { WebsocketMessage, WebsocketMessageType } from './Client'
 
 /* eslint-disable no-unused-vars */
@@ -60,14 +61,16 @@ export class WebSocketManager {
     shouldReconnect: (_closeEvent: CloseEvent) => boolean
   }
 
+  private logger = createLogger('WEBSOCKET')
+
   constructor(options: WebSocketOptions) {
     this.options = {
       reconnectInterval: 5000,
       maxReconnectAttempts: 20,
       heartbeatInterval: 10000,
       heartbeatMessage: { type: WebsocketMessage.PING, data: { nonce: uuid() } },
-      connectionTimeout: 10000, // 10 seconds connection timeout
-      pingTimeout: 5000, // 5 seconds ping timeout
+      connectionTimeout: 10000,
+      pingTimeout: 5000,
       maxMessageRetries: 3,
       messageRetryInterval: 1000,
       handleOnlineOffline: true,
@@ -125,7 +128,7 @@ export class WebSocketManager {
   }
 
   private handleOnline = (): void => {
-    console.log('Network online - reconnecting')
+    this.logger.log('Network online - reconnecting')
     this.isNetworkOnline = true
 
     if (this.ws?.readyState !== WebSocket.OPEN) {
@@ -135,7 +138,7 @@ export class WebSocketManager {
   }
 
   private handleOffline = (): void => {
-    console.log('Network offline - connection lost')
+    this.logger.log('Network offline - connection lost')
     this.isNetworkOnline = false
     this.stopHeartbeat()
 
@@ -149,20 +152,20 @@ export class WebSocketManager {
     this.isPageVisible = !document.hidden
 
     if (document.hidden) {
-      console.log('Page hidden - connection will continue but may be throttled')
+      this.logger.log('Page hidden - connection will continue but may be throttled')
       this.missedMessagesWhileHidden = 0
     } else {
-      console.log('Page visible again - verifying connection')
+      this.logger.log('Page visible again - verifying connection')
 
       if (this.ws?.readyState === WebSocket.OPEN) {
         try {
-          console.log('Sending verification ping')
+          this.logger.log('Sending verification ping')
           this.ws.send(JSON.stringify(this.options.heartbeatMessage))
           this.isWaitingForPong = true
 
           const verifyTimeout = setTimeout(() => {
             if (this.isWaitingForPong && this.ws?.readyState === WebSocket.OPEN) {
-              console.warn('No pong received after page visible - reconnecting')
+              this.logger.warn('No pong received after page visible - reconnecting')
               this.ws.close()
             }
           }, this.options.pingTimeout)
@@ -171,9 +174,9 @@ export class WebSocketManager {
             if (!this.isWaitingForPong) {
               clearTimeout(verifyTimeout)
               clearInterval(checkInterval)
-              console.log('Connection verified after page visible')
+              this.logger.log('Connection verified after page visible')
               if (this.missedMessagesWhileHidden > 0) {
-                console.log(`Potentially missed ${this.missedMessagesWhileHidden} messages while hidden`)
+                this.logger.log(`Potentially missed ${this.missedMessagesWhileHidden} messages while hidden`)
               }
             }
           }, 100)
@@ -182,18 +185,18 @@ export class WebSocketManager {
             clearInterval(checkInterval)
           }, this.options.pingTimeout + 500)
         } catch (error) {
-          console.error('Failed to send verification ping:', error)
+          this.logger.error('Failed to send verification ping:', error)
           this.connect()
         }
       } else {
-        console.warn('WebSocket not open after page visible - reconnecting')
+        this.logger.warn('WebSocket not open after page visible - reconnecting')
         this.connect()
       }
     }
   }
 
   private handleBeforeUnload = (): void => {
-    console.log('Page unloading - closing connection')
+    this.logger.log('Page unloading - closing connection')
     this.shouldReconnect = false
 
     if (this.ws?.readyState === WebSocket.OPEN) {
@@ -203,15 +206,16 @@ export class WebSocketManager {
 
   connect(): void {
     if (this.ws?.readyState === WebSocket.OPEN || this.isConnecting) {
+      this.logger.log('Connection already established or in progress')
       return
     }
 
-    // Don't try to connect if network is offline
     if (!this.isNetworkOnline) {
-      console.log('Network offline - deferring connection attempt')
+      this.logger.log('Network offline - deferring connection attempt')
       return
     }
 
+    this.logger.log('Connecting to WebSocket')
     this.isConnecting = true
     this.shouldReconnect = true
 
@@ -219,15 +223,18 @@ export class WebSocketManager {
       this.ws = new WebSocket(this.options.url, this.options.protocols)
       this.setupEventHandlers()
 
+      this.logger.log('WebSocket created, waiting for connection...')
+
       // Set connection timeout
       this.connectionTimeoutTimer = setTimeout(() => {
         if (this.ws?.readyState === WebSocket.CONNECTING) {
-          console.warn(`WebSocket connection timeout after ${this.options.connectionTimeout}ms`)
+          this.logger.warn(`WebSocket connection timeout after ${this.options.connectionTimeout}ms`)
           this.ws.close()
         }
       }, this.options.connectionTimeout)
 
     } catch (error) {
+      this.logger.error('Failed to create WebSocket:', error)
       this.isConnecting = false
       this.options.onError(error as Event)
       this.scheduleReconnect()
@@ -282,7 +289,7 @@ export class WebSocketManager {
       retryCount: 0,
     }
     this.messageQueue.push(queuedMessage)
-    console.log(`Message queued. Queue size: ${this.messageQueue.length}`)
+    this.logger.log(`Message queued. Queue size: ${this.messageQueue.length}`)
   }
 
   private processMessageQueue(): void {
@@ -297,10 +304,10 @@ export class WebSocketManager {
         this.ws!.send(JSON.stringify(queued.message))
         // Remove from queue on successful send
         this.messageQueue = this.messageQueue.filter((m) => m !== queued)
-        console.log('Queued message sent successfully')
+        this.logger.log('Queued message sent successfully')
       } catch {
         queued.retryCount++
-        console.warn(`Failed to send queued message, retry ${queued.retryCount}/${this.options.maxMessageRetries}`)
+        this.logger.warn(`Failed to send queued message, retry ${queued.retryCount}/${this.options.maxMessageRetries}`)
       }
     })
 
@@ -361,6 +368,10 @@ export class WebSocketManager {
     }
 
     this.ws.onmessage = (_event: MessageEvent) => {
+      if (!this.isPageVisible) {
+        this.missedMessagesWhileHidden++
+      }
+
       // Handle heartbeat responses
       try {
         const data = JSON.parse(_event.data)
@@ -385,7 +396,7 @@ export class WebSocketManager {
 
     // Don't reconnect if network is offline
     if (!this.isNetworkOnline) {
-      console.log('Network offline - skipping reconnect attempt')
+      this.logger.log('Network offline - skipping reconnect attempt')
       return
     }
 
@@ -405,7 +416,7 @@ export class WebSocketManager {
     // const jitter = Math.random() * 1000 // Add up to 1 second of jitter
     const finalDelay = 2000
 
-    console.log(`Scheduling reconnect attempt ${this.reconnectAttempts} in ${Math.round(finalDelay)}ms`)
+    this.logger.log(`Scheduling reconnect attempt ${this.reconnectAttempts} in ${Math.round(finalDelay)}ms`)
 
     this.reconnectTimer = setTimeout(() => {
       this.connect()
@@ -423,7 +434,7 @@ export class WebSocketManager {
         // Set ping timeout
         this.pingTimeoutTimer = setTimeout(() => {
           if (this.isWaitingForPong) {
-            console.warn('Ping timeout - no pong received')
+            this.logger.warn('Ping timeout - no pong received')
             this.ws?.close()
           }
         }, this.options.pingTimeout)
