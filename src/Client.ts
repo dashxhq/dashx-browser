@@ -23,15 +23,17 @@ import {
   IdentifyAccountDocument,
   InvokeAiAgentDocument,
   LoadAiAgentDocument,
-  NotificationFragmentFragment,
+  MessageFragmentFragment,
   PrepareAssetDocument,
   RemoveCouponFromCartDocument,
   SaveContactsDocument,
   SaveStoredPreferencesDocument,
   SearchRecordsDocument,
+  SubscribeContactDocument,
   TrackEventDocument,
-  TrackNotificationDocument,
+  TrackMessageDocument,
   TransferCartDocument,
+  UnsubscribeContactDocument,
 } from './generated'
 import type {
   ContactStubInput,
@@ -44,7 +46,8 @@ import type {
   LoadAiAgentQuery,
   SystemContextInput,
   TrackEventInput,
-  TrackNotificationInput,
+  TrackMessageInput,
+  TrackMessageStatus,
 } from './generated'
 
 const UPLOAD_RETRY_LIMIT = 5
@@ -134,9 +137,31 @@ type WebsocketMessageType =
   | { type: WebsocketMessage.IN_APP_NOTIFICATION, data: InAppNotificationData }
   | { type: WebsocketMessage.PRODUCT_VARIANT_RELEASE_RULE_UPDATED, data: ProductVariantReleaseRule }
   | { type: WebsocketMessage.PLANNER_INBOX_CONVERSATION_CREATED, data: ConversationFragmentFragment }
-  | { type: WebsocketMessage.PLANNER_INBOX_MESSAGE_RECEIVED, data: NotificationFragmentFragment }
+  | { type: WebsocketMessage.PLANNER_INBOX_MESSAGE_RECEIVED, data: MessageFragmentFragment }
 
-type OptionalTimestampTrackNotificationInput = Omit<TrackNotificationInput, 'timestamp'> & { timestamp?: Pick<TrackNotificationInput, 'timestamp'> }
+type FirebaseMessaging = {
+  getToken(_options?: { vapidKey?: string; serviceWorkerRegistration?: ServiceWorkerRegistration }): Promise<string>
+  onMessage(_handler: (_payload: any) => void): () => void
+  deleteToken(): Promise<boolean>
+}
+
+type SubscribeOptions = {
+  vapidKey?: string
+  serviceWorkerRegistration?: ServiceWorkerRegistration
+  tag?: string
+}
+
+type DashXPushPayload = {
+  id: string
+  title?: string
+  body?: string
+  image?: string
+  url?: string
+}
+
+type PushNotificationCallback = (_payload: DashXPushPayload) => void
+
+type OptionalTimestampTrackMessageInput = Omit<TrackMessageInput, 'timestamp'> & { timestamp?: Pick<TrackMessageInput, 'timestamp'> }
 
 class Client {
   #accountAnonymousUid!: string
@@ -148,6 +173,12 @@ class Client {
   #websocketManager: WebSocketManager | null = null
 
   #notificationCallbacks: Set<(_notification: InAppNotificationData) => void> = new Set()
+
+  #firebaseMessaging: FirebaseMessaging | null = null
+
+  #foregroundMessageUnsubscribe: (() => void) | null = null
+
+  #pushNotificationCallbacks: Set<PushNotificationCallback> = new Set()
 
   #watchedQueries: Set<{ refetch: () => void; name: string }> = new Set()
 
@@ -307,6 +338,10 @@ class Client {
     this.accountAnonymousUid = uuid()
     this.accountUid = null
     this.identityToken = null
+    this.#foregroundMessageUnsubscribe?.()
+    this.#foregroundMessageUnsubscribe = null
+    this.#firebaseMessaging = null
+    setItem('fcmToken', null)
   }
 
   track(event: string, data?: Pick<TrackEventInput, 'data'>) {
@@ -323,7 +358,7 @@ class Client {
     return this.graphqlClient.mutate({ mutation: TrackEventDocument, variables })
   }
 
-  trackNotification({ id, status, timestamp }: OptionalTimestampTrackNotificationInput) {
+  trackNotification({ id, status, timestamp }: OptionalTimestampTrackMessageInput) {
     const variables = {
       input: {
         id,
@@ -388,7 +423,7 @@ class Client {
     }
 
     return this.graphqlClient.mutate({
-      mutation: TrackNotificationDocument,
+      mutation: TrackMessageDocument,
       variables,
       update,
     })
@@ -541,6 +576,123 @@ class Client {
         callback(0)
       },
     })
+  }
+
+  async subscribe(
+    messaging: FirebaseMessaging,
+    options?: SubscribeOptions,
+  ): Promise<{ id: string; value: string }> {
+    const token = await messaging.getToken({
+      vapidKey: options?.vapidKey,
+      serviceWorkerRegistration: options?.serviceWorkerRegistration,
+    })
+
+    const savedToken = getItem('fcmToken')
+    if (savedToken === token) {
+      this.logger.log('Already subscribed with this token')
+      return { id: '', value: token }
+    }
+
+    const variables = {
+      input: {
+        kind: 'WEB' as const,
+        value: token,
+        accountUid: this.#accountUid,
+        accountAnonymousUid: this.#accountAnonymousUid,
+        userAgent: navigator.userAgent,
+        targetEnvironment: this.targetEnvironment,
+        ...(options?.tag ? { tag: options.tag } : {}),
+      },
+    }
+
+    const response = await this.graphqlClient
+      .mutate({ mutation: SubscribeContactDocument, variables })
+
+    const result = response.data?.subscribeContact
+    if (!result) {
+      throw new Error('Failed to subscribe contact')
+    }
+
+    setItem('fcmToken', token)
+    this.#firebaseMessaging = messaging
+
+    // Set up foreground message listener
+    this.#foregroundMessageUnsubscribe?.()
+    this.#foregroundMessageUnsubscribe = messaging.onMessage((payload: any) => {
+      const dashxData = payload.data?.dashx
+      if (!dashxData) return
+
+      try {
+        const parsed: DashXPushPayload = JSON.parse(dashxData)
+        this.trackMessage(parsed.id, 'DELIVERED')
+        this.#pushNotificationCallbacks.forEach((callback) => {
+          try {
+            callback(parsed)
+          } catch (error) {
+            this.logger.error('Error in push notification callback:', error)
+          }
+        })
+      } catch (error) {
+        this.logger.error('Error parsing push notification payload:', error)
+      }
+    })
+
+    return result
+  }
+
+  async unsubscribe(): Promise<{ id: string; value: string }> {
+    const savedToken = getItem('fcmToken')
+    if (!savedToken) {
+      throw new Error('No active push subscription found. Call subscribe() first.')
+    }
+
+    if (this.#firebaseMessaging) {
+      await this.#firebaseMessaging.deleteToken()
+    }
+
+    this.#foregroundMessageUnsubscribe?.()
+    this.#foregroundMessageUnsubscribe = null
+
+    const variables = {
+      input: {
+        value: savedToken,
+        accountUid: this.#accountUid,
+        accountAnonymousUid: this.#accountAnonymousUid,
+      },
+    }
+
+    const response = await this.graphqlClient
+      .mutate({ mutation: UnsubscribeContactDocument, variables })
+
+    const result = response.data?.unsubscribeContact
+    if (!result) {
+      throw new Error('Failed to unsubscribe contact')
+    }
+
+    setItem('fcmToken', null)
+    this.#firebaseMessaging = null
+
+    return result
+  }
+
+  onPushNotificationReceived(callback: PushNotificationCallback): () => void {
+    this.#pushNotificationCallbacks.add(callback)
+
+    return () => {
+      this.#pushNotificationCallbacks.delete(callback)
+    }
+  }
+
+  private trackMessage(id: string, status: TrackMessageStatus) {
+    const variables = {
+      input: {
+        id,
+        status,
+        timestamp: new Date().toISOString(),
+      },
+    }
+
+    return this.graphqlClient.mutate({ mutation: TrackMessageDocument, variables })
   }
 
   searchRecords(_resource: string): SearchRecordsInputBuilder
@@ -1113,4 +1265,4 @@ class Client {
 
 export default Client
 export { WebsocketMessage, DASHX_CLOSE_CODES }
-export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiNotification, AiAgentStarterMessage, AiAgentStarterSuggestion }
+export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiNotification, AiAgentStarterMessage, AiAgentStarterSuggestion, DashXPushPayload, FirebaseMessaging, SubscribeOptions }

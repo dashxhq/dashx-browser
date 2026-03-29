@@ -9,7 +9,7 @@ fragment ConversationFragment on Conversation {
   idempotencyKey
   createdAt
   updatedAt
-  notifications {
-    ...NotificationFragment
+  messages {
+    ...MessageFragment
   }
 }

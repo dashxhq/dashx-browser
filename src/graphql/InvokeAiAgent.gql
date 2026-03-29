@@ -1,11 +1,7 @@
 query InvokeAiAgent($input: InvokeAiAgentInput!) {
   invokeAiAgent(input: $input) {
-    id
-    aiRole
-    conversationId
-    renderedContent
-    senderId
-    createdAt
-    updatedAt 
+    messages {
+      ...MessageFragment
+    }
   }
 }

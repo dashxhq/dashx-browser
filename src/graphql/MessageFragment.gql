@@ -1,7 +1,7 @@
-fragment NotificationFragment on Notification {
+fragment MessageFragment on Message {
     id
     attachments
-    deliveryId
+    broadcastId
     conversationId
     integrationId
     data

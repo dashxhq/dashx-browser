@@ -15,11 +15,16 @@
       "types": "./dist/index.es.d.ts",
       "import": "./dist/index.es.js",
       "require": "./dist/index.umd.js"
+    },
+    "./sw": {
+      "types": "./dist/sw-helper.d.ts",
+      "import": "./dist/sw-helper.es.js",
+      "require": "./dist/sw-helper.umd.js"
     }
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && BUILD_TARGET=sw vite build",
     "preview": "vite preview",
     "codegen": "graphql-codegen && eslint --fix ./src/generated",
     "lint": "eslint .",
