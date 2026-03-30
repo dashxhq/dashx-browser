@@ -47,7 +47,6 @@ import type {
   SystemContextInput,
   TrackEventInput,
   TrackMessageInput,
-  TrackMessageStatus,
 } from './generated'
 
 const UPLOAD_RETRY_LIMIT = 5
@@ -161,7 +160,11 @@ type DashXPushPayload = {
 
 type PushNotificationCallback = (_payload: DashXPushPayload) => void
 
-type OptionalTimestampTrackMessageInput = Omit<TrackMessageInput, 'timestamp'> & { timestamp?: Pick<TrackMessageInput, 'timestamp'> }
+type TrackMessageParams = {
+  id: TrackMessageInput['id']
+  status: TrackMessageInput['status']
+  timestamp?: TrackMessageInput['timestamp']
+}
 
 class Client {
   #accountAnonymousUid!: string
@@ -179,6 +182,8 @@ class Client {
   #foregroundMessageUnsubscribe: (() => void) | null = null
 
   #pushNotificationCallbacks: Set<PushNotificationCallback> = new Set()
+
+  #subscribePromise: Promise<{ id: string; value: string }> | null = null
 
   #watchedQueries: Set<{ refetch: () => void; name: string }> = new Set()
 
@@ -322,7 +327,6 @@ class Client {
 
     return this.graphqlClient.mutate({ mutation: IdentifyAccountDocument, variables })
       .then((response) => response.data)
-      .catch((response) => response.errors)
   }
 
   setIdentity(uid: string, token: string): void {
@@ -358,12 +362,12 @@ class Client {
     return this.graphqlClient.mutate({ mutation: TrackEventDocument, variables })
   }
 
-  trackNotification({ id, status, timestamp }: OptionalTimestampTrackMessageInput) {
+  trackMessage({ id, status, timestamp }: TrackMessageParams) {
     const variables = {
       input: {
         id,
         status,
-        timestamp: timestamp || new Date(),
+        timestamp: timestamp || new Date().toISOString(),
       },
     }
 
@@ -429,7 +433,7 @@ class Client {
     })
   }
 
-  fetchInAppNotifications() {
+  async fetchInAppNotifications() {
     if (!this.#accountUid) {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
@@ -439,10 +443,6 @@ class Client {
         accountUid: this.#accountUid,
       },
     }
-    this.graphqlClient.query({
-      query: FetchInAppNotificationsDocument,
-      variables: fetchInAppNotificationsVariables,
-    })
 
     const fetchInAppNotificationsAggregateVariables = {
       input: {
@@ -452,10 +452,17 @@ class Client {
         },
       },
     }
-    this.graphqlClient.query({
-      query: FetchInAppNotificationsAggregateDocument,
-      variables: fetchInAppNotificationsAggregateVariables,
-    })
+
+    await Promise.all([
+      this.graphqlClient.query({
+        query: FetchInAppNotificationsDocument,
+        variables: fetchInAppNotificationsVariables,
+      }),
+      this.graphqlClient.query({
+        query: FetchInAppNotificationsAggregateDocument,
+        variables: fetchInAppNotificationsAggregateVariables,
+      }),
+    ])
   }
 
   addInAppNotificationToCache(notification: InAppNotificationData): void {
@@ -511,7 +518,7 @@ class Client {
     })
   }
 
-  watchFetchInAppNotifications(callback: (_data: InAppNotifications) => void): void {
+  watchFetchInAppNotifications(callback: (_data: InAppNotifications) => void): () => void {
     if (!this.#accountUid) {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
@@ -532,7 +539,7 @@ class Client {
       observableQuery.refetch()
     }, 'watchFetchInAppNotifications')
 
-    observableQuery.subscribe({
+    const subscription = observableQuery.subscribe({
       next(_response) {
         callback(_response.data?.notifications)
       },
@@ -541,9 +548,14 @@ class Client {
         callback([])
       },
     })
+
+    return () => {
+      subscription.unsubscribe()
+      this.unregisterWatchedQuery('watchFetchInAppNotifications')
+    }
   }
 
-  watchFetchInAppNotificationsAggregate(callback: (_data: number) => void): void {
+  watchFetchInAppNotificationsAggregate(callback: (_data: number) => void): () => void {
     if (!this.#accountUid) {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
@@ -567,7 +579,7 @@ class Client {
       observableQuery.refetch()
     }, 'watchFetchInAppNotificationsAggregate')
 
-    observableQuery.subscribe({
+    const subscription = observableQuery.subscribe({
       next(_response) {
         callback(_response.data?.notificationsAggregate.count || 0)
       },
@@ -576,9 +588,28 @@ class Client {
         callback(0)
       },
     })
+
+    return () => {
+      subscription.unsubscribe()
+      this.unregisterWatchedQuery('watchFetchInAppNotificationsAggregate')
+    }
   }
 
-  async subscribe(
+  subscribe(
+    messaging: FirebaseMessaging,
+    options?: SubscribeOptions,
+  ): Promise<{ id: string; value: string }> {
+    if (this.#subscribePromise) {
+      return this.#subscribePromise
+    }
+
+    this.#subscribePromise = this.#performSubscribe(messaging, options)
+      .finally(() => { this.#subscribePromise = null })
+
+    return this.#subscribePromise
+  }
+
+  async #performSubscribe(
     messaging: FirebaseMessaging,
     options?: SubscribeOptions,
   ): Promise<{ id: string; value: string }> {
@@ -599,7 +630,7 @@ class Client {
         value: token,
         accountUid: this.#accountUid,
         accountAnonymousUid: this.#accountAnonymousUid,
-        userAgent: navigator.userAgent,
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
         targetEnvironment: this.targetEnvironment,
         ...(options?.tag ? { tag: options.tag } : {}),
       },
@@ -624,7 +655,7 @@ class Client {
 
       try {
         const parsed: DashXPushPayload = JSON.parse(dashxData)
-        this.trackMessage(parsed.id, 'DELIVERED')
+        this.trackMessage({ id: parsed.id, status: 'DELIVERED' })
         this.#pushNotificationCallbacks.forEach((callback) => {
           try {
             callback(parsed)
@@ -681,18 +712,6 @@ class Client {
     return () => {
       this.#pushNotificationCallbacks.delete(callback)
     }
-  }
-
-  private trackMessage(id: string, status: TrackMessageStatus) {
-    const variables = {
-      input: {
-        id,
-        status,
-        timestamp: new Date().toISOString(),
-      },
-    }
-
-    return this.graphqlClient.mutate({ mutation: TrackMessageDocument, variables })
   }
 
   searchRecords(_resource: string): SearchRecordsInputBuilder
@@ -1245,7 +1264,7 @@ class Client {
       case WebsocketMessage.IN_APP_NOTIFICATION:
         // Track that the notification was delivered if accountUid is available
         if (this.#accountUid) {
-          this.trackNotification({ id: _message.data.id, status: 'DELIVERED' })
+          this.trackMessage({ id: _message.data.id, status: 'DELIVERED' })
           // Add to cache for immediate UI update
           this.addInAppNotificationToCache(_message.data)
         }

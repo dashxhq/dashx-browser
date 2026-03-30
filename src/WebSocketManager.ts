@@ -134,6 +134,10 @@ export class WebSocketManager {
     this.isNetworkOnline = true
 
     if (this.ws?.readyState !== WebSocket.OPEN) {
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer)
+        this.reconnectTimer = null
+      }
       this.reconnectAttempts = 0
       this.connect()
     }

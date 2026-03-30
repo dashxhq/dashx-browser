@@ -47,6 +47,8 @@ function createDashXServiceWorkerHandler(config: DashXServiceWorkerConfig) {
           },
         },
       }),
+    }).catch(() => {
+      // Network error — silently fail so SW doesn't crash
     })
   }
 
@@ -64,13 +66,16 @@ function createDashXServiceWorkerHandler(config: DashXServiceWorkerConfig) {
       return
     }
 
-    trackMessage(parsed.id, 'DELIVERED')
-
-    registration.showNotification(parsed.title || '', {
+    const trackPromise = trackMessage(parsed.id, 'DELIVERED')
+    const notifyPromise = registration.showNotification(parsed.title || '', {
       body: parsed.body || '',
       icon: parsed.image,
       data: { dashxNotificationId: parsed.id, url: parsed.url },
+    }).catch(() => {
+      // showNotification may fail if permission revoked
     })
+
+    return Promise.all([ trackPromise, notifyPromise ])
   }
 
   function onNotificationClick(event: SWNotificationEvent, clients: SWClients) {
@@ -78,11 +83,18 @@ function createDashXServiceWorkerHandler(config: DashXServiceWorkerConfig) {
     const { dashxNotificationId, url } = event.notification.data || {}
 
     if (dashxNotificationId) {
-      trackMessage(dashxNotificationId, 'CLICKED')
+      event.waitUntil(trackMessage(dashxNotificationId, 'CLICKED') || Promise.resolve())
     }
 
     if (url) {
-      event.waitUntil(clients.openWindow(url))
+      try {
+        const parsed = new URL(url)
+        if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+          event.waitUntil(clients.openWindow(url))
+        }
+      } catch {
+        // Invalid URL — ignore
+      }
     }
   }
 
@@ -90,7 +102,7 @@ function createDashXServiceWorkerHandler(config: DashXServiceWorkerConfig) {
     const { dashxNotificationId } = event.notification.data || {}
 
     if (dashxNotificationId) {
-      trackMessage(dashxNotificationId, 'DISMISSED')
+      event.waitUntil(trackMessage(dashxNotificationId, 'DISMISSED') || Promise.resolve())
     }
   }
 
