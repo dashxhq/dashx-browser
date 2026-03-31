@@ -1,4 +1,4 @@
-query FetchInAppNotifications($input: FetchInAppNotificationsInput!,) {
+query FetchInAppNotifications($input: FetchInAppNotificationsInput!) {
   notifications: fetchInAppNotifications(input: $input) {
     id
     sentAt

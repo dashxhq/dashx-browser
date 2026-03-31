@@ -23,15 +23,17 @@ import {
   IdentifyAccountDocument,
   InvokeAiAgentDocument,
   LoadAiAgentDocument,
-  NotificationFragmentFragment,
+  MessageFragmentFragment,
   PrepareAssetDocument,
   RemoveCouponFromCartDocument,
   SaveContactsDocument,
   SaveStoredPreferencesDocument,
   SearchRecordsDocument,
+  SubscribeContactDocument,
   TrackEventDocument,
-  TrackNotificationDocument,
+  TrackMessageDocument,
   TransferCartDocument,
+  UnsubscribeContactDocument,
 } from './generated'
 import type {
   ContactStubInput,
@@ -44,7 +46,7 @@ import type {
   LoadAiAgentQuery,
   SystemContextInput,
   TrackEventInput,
-  TrackNotificationInput,
+  TrackMessageInput,
 } from './generated'
 
 const UPLOAD_RETRY_LIMIT = 5
@@ -134,9 +136,35 @@ type WebsocketMessageType =
   | { type: WebsocketMessage.IN_APP_NOTIFICATION, data: InAppNotificationData }
   | { type: WebsocketMessage.PRODUCT_VARIANT_RELEASE_RULE_UPDATED, data: ProductVariantReleaseRule }
   | { type: WebsocketMessage.PLANNER_INBOX_CONVERSATION_CREATED, data: ConversationFragmentFragment }
-  | { type: WebsocketMessage.PLANNER_INBOX_MESSAGE_RECEIVED, data: NotificationFragmentFragment }
+  | { type: WebsocketMessage.PLANNER_INBOX_MESSAGE_RECEIVED, data: MessageFragmentFragment }
 
-type OptionalTimestampTrackNotificationInput = Omit<TrackNotificationInput, 'timestamp'> & { timestamp?: Pick<TrackNotificationInput, 'timestamp'> }
+type FirebaseMessaging = {
+  getToken(_options?: { vapidKey?: string; serviceWorkerRegistration?: ServiceWorkerRegistration }): Promise<string>
+  onMessage(_handler: (_payload: any) => void): () => void
+  deleteToken(): Promise<boolean>
+}
+
+type SubscribeOptions = {
+  vapidKey?: string
+  serviceWorkerRegistration?: ServiceWorkerRegistration
+  tag?: string
+}
+
+type DashXPushPayload = {
+  id: string
+  title?: string
+  body?: string
+  image?: string
+  url?: string
+}
+
+type PushNotificationCallback = (_payload: DashXPushPayload) => void
+
+type TrackMessageParams = {
+  id: TrackMessageInput['id']
+  status: TrackMessageInput['status']
+  timestamp?: TrackMessageInput['timestamp']
+}
 
 class Client {
   #accountAnonymousUid!: string
@@ -148,6 +176,14 @@ class Client {
   #websocketManager: WebSocketManager | null = null
 
   #notificationCallbacks: Set<(_notification: InAppNotificationData) => void> = new Set()
+
+  #firebaseMessaging: FirebaseMessaging | null = null
+
+  #foregroundMessageUnsubscribe: (() => void) | null = null
+
+  #pushNotificationCallbacks: Set<PushNotificationCallback> = new Set()
+
+  #subscribePromise: Promise<{ id: string; value: string }> | null = null
 
   #watchedQueries: Set<{ refetch: () => void; name: string }> = new Set()
 
@@ -291,7 +327,6 @@ class Client {
 
     return this.graphqlClient.mutate({ mutation: IdentifyAccountDocument, variables })
       .then((response) => response.data)
-      .catch((response) => response.errors)
   }
 
   setIdentity(uid: string, token: string): void {
@@ -307,6 +342,10 @@ class Client {
     this.accountAnonymousUid = uuid()
     this.accountUid = null
     this.identityToken = null
+    this.#foregroundMessageUnsubscribe?.()
+    this.#foregroundMessageUnsubscribe = null
+    this.#firebaseMessaging = null
+    setItem('fcmToken', null)
   }
 
   track(event: string, data?: Pick<TrackEventInput, 'data'>) {
@@ -323,12 +362,12 @@ class Client {
     return this.graphqlClient.mutate({ mutation: TrackEventDocument, variables })
   }
 
-  trackNotification({ id, status, timestamp }: OptionalTimestampTrackNotificationInput) {
+  trackMessage({ id, status, timestamp }: TrackMessageParams) {
     const variables = {
       input: {
         id,
         status,
-        timestamp: timestamp || new Date(),
+        timestamp: timestamp || new Date().toISOString(),
       },
     }
 
@@ -388,13 +427,13 @@ class Client {
     }
 
     return this.graphqlClient.mutate({
-      mutation: TrackNotificationDocument,
+      mutation: TrackMessageDocument,
       variables,
       update,
     })
   }
 
-  fetchInAppNotifications() {
+  async fetchInAppNotifications() {
     if (!this.#accountUid) {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
@@ -404,10 +443,6 @@ class Client {
         accountUid: this.#accountUid,
       },
     }
-    this.graphqlClient.query({
-      query: FetchInAppNotificationsDocument,
-      variables: fetchInAppNotificationsVariables,
-    })
 
     const fetchInAppNotificationsAggregateVariables = {
       input: {
@@ -417,10 +452,17 @@ class Client {
         },
       },
     }
-    this.graphqlClient.query({
-      query: FetchInAppNotificationsAggregateDocument,
-      variables: fetchInAppNotificationsAggregateVariables,
-    })
+
+    await Promise.all([
+      this.graphqlClient.query({
+        query: FetchInAppNotificationsDocument,
+        variables: fetchInAppNotificationsVariables,
+      }),
+      this.graphqlClient.query({
+        query: FetchInAppNotificationsAggregateDocument,
+        variables: fetchInAppNotificationsAggregateVariables,
+      }),
+    ])
   }
 
   addInAppNotificationToCache(notification: InAppNotificationData): void {
@@ -476,7 +518,7 @@ class Client {
     })
   }
 
-  watchFetchInAppNotifications(callback: (_data: InAppNotifications) => void): void {
+  watchFetchInAppNotifications(callback: (_data: InAppNotifications) => void): () => void {
     if (!this.#accountUid) {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
@@ -497,7 +539,7 @@ class Client {
       observableQuery.refetch()
     }, 'watchFetchInAppNotifications')
 
-    observableQuery.subscribe({
+    const subscription = observableQuery.subscribe({
       next(_response) {
         callback(_response.data?.notifications)
       },
@@ -506,9 +548,14 @@ class Client {
         callback([])
       },
     })
+
+    return () => {
+      subscription.unsubscribe()
+      this.unregisterWatchedQuery('watchFetchInAppNotifications')
+    }
   }
 
-  watchFetchInAppNotificationsAggregate(callback: (_data: number) => void): void {
+  watchFetchInAppNotificationsAggregate(callback: (_data: number) => void): () => void {
     if (!this.#accountUid) {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
@@ -532,7 +579,7 @@ class Client {
       observableQuery.refetch()
     }, 'watchFetchInAppNotificationsAggregate')
 
-    observableQuery.subscribe({
+    const subscription = observableQuery.subscribe({
       next(_response) {
         callback(_response.data?.notificationsAggregate.count || 0)
       },
@@ -541,6 +588,150 @@ class Client {
         callback(0)
       },
     })
+
+    return () => {
+      subscription.unsubscribe()
+      this.unregisterWatchedQuery('watchFetchInAppNotificationsAggregate')
+    }
+  }
+
+  subscribe(
+    messaging: FirebaseMessaging,
+    options?: SubscribeOptions,
+  ): Promise<{ id: string; value: string }> {
+    if (this.#subscribePromise) {
+      return this.#subscribePromise
+    }
+
+    this.#subscribePromise = this.#performSubscribe(messaging, options)
+      .finally(() => { this.#subscribePromise = null })
+
+    return this.#subscribePromise
+  }
+
+  async #performSubscribe(
+    messaging: FirebaseMessaging,
+    options?: SubscribeOptions,
+  ): Promise<{ id: string; value: string }> {
+    const token = await messaging.getToken({
+      vapidKey: options?.vapidKey,
+      serviceWorkerRegistration: options?.serviceWorkerRegistration,
+    })
+
+    const savedToken = getItem('fcmToken')
+    if (savedToken === token) {
+      this.logger.log('Already subscribed with this token')
+      return { id: '', value: token }
+    }
+
+    const variables = {
+      input: {
+        kind: 'WEB' as const,
+        value: token,
+        accountUid: this.#accountUid,
+        accountAnonymousUid: this.#accountAnonymousUid,
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+        targetEnvironment: this.targetEnvironment,
+        ...(options?.tag ? { tag: options.tag } : {}),
+      },
+    }
+
+    const response = await this.graphqlClient
+      .mutate({ mutation: SubscribeContactDocument, variables })
+
+    const result = response.data?.subscribeContact
+    if (!result) {
+      throw new Error('Failed to subscribe contact')
+    }
+
+    setItem('fcmToken', token)
+    this.#firebaseMessaging = messaging
+
+    // Set up foreground message listener
+    this.#foregroundMessageUnsubscribe?.()
+    this.#foregroundMessageUnsubscribe = messaging.onMessage((payload: any) => {
+      this.logger.log('Foreground message received:', JSON.stringify(payload))
+
+      let parsed: DashXPushPayload | null = null
+
+      // Data message: DashX payload is in data.dashx as a JSON string
+      if (payload.data?.dashx) {
+        try {
+          parsed = JSON.parse(payload.data.dashx)
+        } catch (error) {
+          this.logger.error('Error parsing dashx data payload:', error)
+        }
+      }
+
+      // Notification message: Firebase puts content in payload.notification
+      if (!parsed && payload.notification) {
+        parsed = {
+          id: payload.messageId || payload.fcmMessageId || '',
+          title: payload.notification.title,
+          body: payload.notification.body,
+          image: payload.notification.image,
+        }
+      }
+
+      if (!parsed) return
+
+      if (parsed.id) {
+        this.trackMessage({ id: parsed.id, status: 'DELIVERED' })
+      }
+
+      this.#pushNotificationCallbacks.forEach((callback) => {
+        try {
+          callback(parsed)
+        } catch (error) {
+          this.logger.error('Error in push notification callback:', error)
+        }
+      })
+    })
+
+    return result
+  }
+
+  async unsubscribe(): Promise<{ id: string; value: string }> {
+    const savedToken = getItem('fcmToken')
+    if (!savedToken) {
+      throw new Error('No active push subscription found. Call subscribe() first.')
+    }
+
+    if (this.#firebaseMessaging) {
+      await this.#firebaseMessaging.deleteToken()
+    }
+
+    this.#foregroundMessageUnsubscribe?.()
+    this.#foregroundMessageUnsubscribe = null
+
+    const variables = {
+      input: {
+        value: savedToken,
+        accountUid: this.#accountUid,
+        accountAnonymousUid: this.#accountAnonymousUid,
+      },
+    }
+
+    const response = await this.graphqlClient
+      .mutate({ mutation: UnsubscribeContactDocument, variables })
+
+    const result = response.data?.unsubscribeContact
+    if (!result) {
+      throw new Error('Failed to unsubscribe contact')
+    }
+
+    setItem('fcmToken', null)
+    this.#firebaseMessaging = null
+
+    return result
+  }
+
+  onPushNotificationReceived(callback: PushNotificationCallback): () => void {
+    this.#pushNotificationCallbacks.add(callback)
+
+    return () => {
+      this.#pushNotificationCallbacks.delete(callback)
+    }
   }
 
   searchRecords(_resource: string): SearchRecordsInputBuilder
@@ -1093,7 +1284,7 @@ class Client {
       case WebsocketMessage.IN_APP_NOTIFICATION:
         // Track that the notification was delivered if accountUid is available
         if (this.#accountUid) {
-          this.trackNotification({ id: _message.data.id, status: 'DELIVERED' })
+          this.trackMessage({ id: _message.data.id, status: 'DELIVERED' })
           // Add to cache for immediate UI update
           this.addInAppNotificationToCache(_message.data)
         }
@@ -1113,4 +1304,4 @@ class Client {
 
 export default Client
 export { WebsocketMessage, DASHX_CLOSE_CODES }
-export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiNotification, AiAgentStarterMessage, AiAgentStarterSuggestion }
+export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiNotification, AiAgentStarterMessage, AiAgentStarterSuggestion, DashXPushPayload, FirebaseMessaging, SubscribeOptions }

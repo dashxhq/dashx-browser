@@ -10,8 +10,6 @@
   <h4>
     <a href="https://dashx.com">Website</a>
     <span> | </span>
-    <a href="https://dashxdemo.com">Demos</a>
-    <span> | </span>
     <a href="https://docs.dashx.com/developer">Documentation</a>
   </h4>
 </div>
@@ -36,7 +34,7 @@ yarn add @dashx/browser
 
 ## Usage
 
-For detailed usage, refer to the [documentation](https://docs.dashx.com).
+For detailed documentation, visit [JavaScript documentation](https://docs.dashx.com/sdks/client-side/javascript-sdk).
 
 ## Contributing
 
@@ -49,10 +47,8 @@ yarn install
 - To start dev server with hot reload:
 
 ```sh
-yarn start
+yarn dev
 ```
-
-This will run a dev server that logs out errors and warnings and reloads itself on any file save.
 
 - To create production build:
 

@@ -2,6 +2,9 @@ import packageInfo from '../package.json'
 import type { SystemContextInput, SystemContextLibraryInput, SystemContextScreenInput } from './generated'
 
 function getScreenDetails(): SystemContextScreenInput {
+  if (typeof window === 'undefined') {
+    return { density: 1, height: 0, width: 0 }
+  }
   return {
     density: window.devicePixelRatio,
     height: window.screen.height,
@@ -14,14 +17,20 @@ function getLibrary(): SystemContextLibraryInput {
 }
 
 function getLocale(): string {
+  if (typeof navigator === 'undefined') return 'en-US'
   return navigator.language
 }
 
-function getTimezone() {
-  return Intl.DateTimeFormat().resolvedOptions().timeZone
+function getTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone
+  } catch {
+    return 'UTC'
+  }
 }
 
 function getUserAgent(): string {
+  if (typeof navigator === 'undefined') return ''
   return navigator.userAgent
 }
 

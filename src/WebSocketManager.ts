@@ -134,6 +134,10 @@ export class WebSocketManager {
     this.isNetworkOnline = true
 
     if (this.ws?.readyState !== WebSocket.OPEN) {
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer)
+        this.reconnectTimer = null
+      }
       this.reconnectAttempts = 0
       this.connect()
     }
@@ -147,7 +151,7 @@ export class WebSocketManager {
     // mark not-connecting and force-close the socket to trigger onClose cleanup
     this.isConnecting = false
     if (this.ws && this.ws.readyState !== WebSocket.CLOSED) {
-      try { this.ws.close() } catch {}
+      try { this.ws.close() } catch { /* ignore */ }
     }
 
     if (this.reconnectTimer) {
@@ -250,6 +254,7 @@ export class WebSocketManager {
           try {
             this.ws.close()
           } catch {
+            /* ignore */
           }
         }
       }, this.options.connectionTimeout)
