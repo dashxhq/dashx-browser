@@ -109,5 +109,5 @@ function createDashXServiceWorkerHandler(config: DashXServiceWorkerConfig) {
   return { onBackgroundMessage, onNotificationClick, onNotificationClose, trackMessage }
 }
 
-export default createDashXServiceWorkerHandler
+export { createDashXServiceWorkerHandler }
 export type { DashXServiceWorkerConfig, DashXPushPayload }

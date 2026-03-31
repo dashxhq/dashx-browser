@@ -650,22 +650,42 @@ class Client {
     // Set up foreground message listener
     this.#foregroundMessageUnsubscribe?.()
     this.#foregroundMessageUnsubscribe = messaging.onMessage((payload: any) => {
-      const dashxData = payload.data?.dashx
-      if (!dashxData) return
+      this.logger.log('Foreground message received:', JSON.stringify(payload))
 
-      try {
-        const parsed: DashXPushPayload = JSON.parse(dashxData)
-        this.trackMessage({ id: parsed.id, status: 'DELIVERED' })
-        this.#pushNotificationCallbacks.forEach((callback) => {
-          try {
-            callback(parsed)
-          } catch (error) {
-            this.logger.error('Error in push notification callback:', error)
-          }
-        })
-      } catch (error) {
-        this.logger.error('Error parsing push notification payload:', error)
+      let parsed: DashXPushPayload | null = null
+
+      // Data message: DashX payload is in data.dashx as a JSON string
+      if (payload.data?.dashx) {
+        try {
+          parsed = JSON.parse(payload.data.dashx)
+        } catch (error) {
+          this.logger.error('Error parsing dashx data payload:', error)
+        }
       }
+
+      // Notification message: Firebase puts content in payload.notification
+      if (!parsed && payload.notification) {
+        parsed = {
+          id: payload.messageId || payload.fcmMessageId || '',
+          title: payload.notification.title,
+          body: payload.notification.body,
+          image: payload.notification.image,
+        }
+      }
+
+      if (!parsed) return
+
+      if (parsed.id) {
+        this.trackMessage({ id: parsed.id, status: 'DELIVERED' })
+      }
+
+      this.#pushNotificationCallbacks.forEach((callback) => {
+        try {
+          callback(parsed)
+        } catch (error) {
+          this.logger.error('Error in push notification callback:', error)
+        }
+      })
     })
 
     return result

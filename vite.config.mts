@@ -19,6 +19,8 @@ export default defineConfig(buildTarget === 'sw' ? {
     rollupOptions: {
       output: {
         exports: 'named',
+        // Expose createDashXServiceWorkerHandler as a top-level global for importScripts usage
+        footer: 'if (typeof DashXServiceWorker !== "undefined" && DashXServiceWorker.createDashXServiceWorkerHandler) { self.createDashXServiceWorkerHandler = DashXServiceWorker.createDashXServiceWorkerHandler; }',
       },
     },
   },
