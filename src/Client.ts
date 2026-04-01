@@ -613,6 +613,13 @@ class Client {
     messaging: FirebaseMessaging,
     options?: SubscribeOptions,
   ): Promise<{ id: string; value: string }> {
+    if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
+      const permission = await Notification.requestPermission()
+      if (permission !== 'granted') {
+        throw new Error(`Notification permission ${permission}`)
+      }
+    }
+
     const token = await messaging.getToken({
       vapidKey: options?.vapidKey,
       serviceWorkerRegistration: options?.serviceWorkerRegistration,
