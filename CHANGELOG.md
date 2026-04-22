@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.1
+
+### Fixed
+
+- **SSR-safety for `storage.ts`.** Importing `@dashx/browser` in a server-rendered context (Next.js RSC, `getServerSideProps`, Remix loaders, Deno, plain Node) no longer risks crashing on `window` access. `getItem` / `setItem` now early-bail on `typeof window === 'undefined'` and tolerate `window.localStorage` access faulting (Safari private mode, sandboxed iframes). Client construction is now fully SSR-safe: `DashX.configure(...)` on the server returns a Client that holds identity in memory for the request, then rehydrates from `localStorage` on the client after hydration.
+
 ## 0.5.0
 
 ### Breaking Changes

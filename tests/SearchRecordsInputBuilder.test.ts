@@ -8,7 +8,7 @@ describe('SearchRecordsInputBuilder', () => {
 
     expect(builder.limit(10)).toBe(builder)
     expect(builder.filter({ status: { equals: 'published' } })).toBe(builder)
-    expect(builder.order([{ createdAt: 'DESC' }])).toBe(builder)
+    expect(builder.order([ { createdAt: 'DESC' } ])).toBe(builder)
     expect(builder.language('en')).toBe(builder)
     expect(builder.fields([ 'title', 'body' ])).toBe(builder)
     expect(builder.include([ 'author' ])).toBe(builder)
@@ -17,7 +17,7 @@ describe('SearchRecordsInputBuilder', () => {
   })
 
   it('all() invokes the callback with the accumulated options', async () => {
-    const callback = vi.fn(async () => [{ id: 1 }, { id: 2 }])
+    const callback = vi.fn(async () => [ { id: 1 }, { id: 2 } ])
     const builder = new SearchRecordsInputBuilder('articles', callback)
 
     const data = await builder.limit(5).language('en').all()
@@ -28,7 +28,7 @@ describe('SearchRecordsInputBuilder', () => {
       limit: 5,
       language: 'en',
     }))
-    expect(data).toEqual([{ id: 1 }, { id: 2 }])
+    expect(data).toEqual([ { id: 1 }, { id: 2 } ])
   })
 
   it('all(withOptions) merges passed options over accumulated ones', async () => {
@@ -45,7 +45,7 @@ describe('SearchRecordsInputBuilder', () => {
   })
 
   it('one() returns the first element when callback resolves to a non-empty array', async () => {
-    const callback = vi.fn(async () => [{ id: 'first' }, { id: 'second' }])
+    const callback = vi.fn(async () => [ { id: 'first' }, { id: 'second' } ])
     const builder = new SearchRecordsInputBuilder('articles', callback)
 
     const record = await builder.one()

@@ -66,4 +66,25 @@ describe('storage', () => {
       expect(parsed).toEqual({ accountUid: 'user-1', identityToken: 'token-a' })
     })
   })
+
+  describe('when window.localStorage access throws (Safari private mode, sandboxed iframe)', () => {
+    it('getItem returns null and setItem is a no-op without re-throwing', () => {
+      const originalDescriptor = Object.getOwnPropertyDescriptor(window, 'localStorage')
+      Object.defineProperty(window, 'localStorage', {
+        configurable: true,
+        get() {
+          throw new Error('SecurityError: access to localStorage denied')
+        },
+      })
+
+      try {
+        expect(getItem('accountUid')).toBeNull()
+        expect(() => setItem('accountUid', 'user-1')).not.toThrow()
+      } finally {
+        if (originalDescriptor) {
+          Object.defineProperty(window, 'localStorage', originalDescriptor)
+        }
+      }
+    })
+  })
 })

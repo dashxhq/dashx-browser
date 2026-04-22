@@ -15,7 +15,7 @@ export default [
       sourceType: 'module',
       parser: typescriptParser,
       parserOptions: {
-        project: './tsconfig.json',
+        project: './tsconfig.eslint.json',
       },
     },
     plugins: {
