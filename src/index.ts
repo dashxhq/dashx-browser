@@ -39,7 +39,7 @@ const DashX = {
 
   // Identity
   identify(options: string | Record<string, any>) { return ensureConfigured().identify(options as any) },
-  setIdentity(uid: string, token: string) { return ensureConfigured().setIdentity(uid, token) },
+  setIdentity(uid?: string | null, token?: string | null) { return ensureConfigured().setIdentity(uid, token) },
   setAnonymousIdentity(uid: string) { return ensureConfigured().setAnonymousIdentity(uid) },
   reset() { return ensureConfigured().reset() },
 

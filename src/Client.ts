@@ -11,7 +11,6 @@ import {
   AddItemToCartDocument,
   ApplyCouponToCartDocument,
   AssetDocument,
-  ConversationFragmentFragment,
   FetchCartDocument,
   FetchContactsDocument,
   FetchInAppNotificationsAggregateDocument,
@@ -23,7 +22,6 @@ import {
   IdentifyAccountDocument,
   InvokeAiAgentDocument,
   LoadAiAgentDocument,
-  MessageFragmentFragment,
   PrepareAssetDocument,
   RemoveCouponFromCartDocument,
   SaveContactsDocument,
@@ -122,8 +120,6 @@ enum WebsocketMessage {
   SUBSCRIPTION_SUCCEEDED = 'SUBSCRIPTION_SUCCEEDED',
   IN_APP_NOTIFICATION = 'IN_APP_NOTIFICATION',
   PRODUCT_VARIANT_RELEASE_RULE_UPDATED = 'PRODUCT_VARIANT_RELEASE_RULE_UPDATED',
-  PLANNER_INBOX_CONVERSATION_CREATED = 'PLANNER_INBOX_CONVERSATION_CREATED',
-  PLANNER_INBOX_MESSAGE_RECEIVED = 'PLANNER_INBOX_MESSAGE_RECEIVED'
 }
 /* eslint-enable no-unused-vars */
 
@@ -135,8 +131,6 @@ type WebsocketMessageType =
   | { type: WebsocketMessage.SUBSCRIPTION_SUCCEEDED, data: SubscriptionSucceededData }
   | { type: WebsocketMessage.IN_APP_NOTIFICATION, data: InAppNotificationData }
   | { type: WebsocketMessage.PRODUCT_VARIANT_RELEASE_RULE_UPDATED, data: ProductVariantReleaseRule }
-  | { type: WebsocketMessage.PLANNER_INBOX_CONVERSATION_CREATED, data: ConversationFragmentFragment }
-  | { type: WebsocketMessage.PLANNER_INBOX_MESSAGE_RECEIVED, data: MessageFragmentFragment }
 
 type FirebaseMessaging = {
   getToken(_options?: { vapidKey?: string; serviceWorkerRegistration?: ServiceWorkerRegistration }): Promise<string>
@@ -329,9 +323,9 @@ class Client {
       .then((response) => response.data)
   }
 
-  setIdentity(uid: string, token: string): void {
-    this.accountUid = uid
-    this.identityToken = token
+  setIdentity(uid?: string | null, token?: string | null): void {
+    this.accountUid = uid ?? null
+    this.identityToken = token ?? null
   }
 
   setAnonymousIdentity(uid: string): void {
@@ -1297,10 +1291,6 @@ class Client {
         }
         // Notify all registered callbacks
         this.notifyCallbacks(_message.data)
-        break
-
-      case WebsocketMessage.PLANNER_INBOX_CONVERSATION_CREATED:
-      case WebsocketMessage.PRODUCT_VARIANT_RELEASE_RULE_UPDATED:
         break
 
       default:

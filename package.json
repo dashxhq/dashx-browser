@@ -27,6 +27,8 @@
     "build": "tsc && vite build && BUILD_TARGET=sw vite build",
     "preview": "vite preview",
     "codegen": "graphql-codegen && eslint --fix ./src/generated",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   },
@@ -41,6 +43,7 @@
   "dependencies": {
     "@apollo/client": "^3.13.8",
     "@graphql-typed-document-node/core": "^3.2.0",
+    "ajv": "^8.18.0",
     "graphql": "^16.11.0",
     "uuid-random": "^1.3.2"
   },
@@ -57,8 +60,10 @@
     "eslint-config-airbnb-typescript": "^18.0.0",
     "eslint-plugin-import": "^2.32.0",
     "graphql-codegen-typescript-operation-types": "^2.0.2",
+    "jsdom": "^29.0.2",
     "typescript": "^5.8.3",
     "vite": "^7.0.0",
-    "vite-plugin-dts": "^4.5.4"
+    "vite-plugin-dts": "^4.5.4",
+    "vitest": "^4.1.5"
   }
 }
