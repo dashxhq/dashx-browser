@@ -70,6 +70,29 @@ describe('sw-helper onNotificationClick', () => {
     expect(clients.openWindow).not.toHaveBeenCalled()
   })
 
+  it('focuses an existing tab but skips navigate when its URL already matches the target (no pointless reload)', async () => {
+    // Regression: tapping a URL-less push with the app already at the scope
+    // root used to call `client.navigate(url)` against the same URL, causing
+    // a full-page reload that reads as "the tab flashed" instead of "the tab
+    // switched." The focus action stays clean now — navigate only fires when
+    // the URL actually changes.
+    const handler = createDashXServiceWorkerHandler(config)
+    const existing = makeClient('https://app.example.com/')
+    const clients = makeClients({ clients: [ existing ] })
+
+    const event = makeEvent({
+      dashxNotificationId: 'n-1b',
+      url: 'https://app.example.com/',
+    })
+
+    handler.onNotificationClick(event as any, clients as any)
+    await drain(event)
+
+    expect(existing.focus).toHaveBeenCalledTimes(1)
+    expect(existing.navigate).not.toHaveBeenCalled()
+    expect(clients.openWindow).not.toHaveBeenCalled()
+  })
+
   it('falls back to openWindow when no same-origin tab is open', async () => {
     const handler = createDashXServiceWorkerHandler(config)
     const otherOrigin = makeClient('https://other.example.com/')
@@ -165,6 +188,38 @@ describe('sw-helper onNotificationClick', () => {
 
     expect(broken.focus).not.toHaveBeenCalled()
     expect(good.focus).toHaveBeenCalled()
+  })
+})
+
+describe('sw-helper onNotificationClose', () => {
+  it('tracks DISMISSED with the notification id when present', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const handler = createDashXServiceWorkerHandler(config)
+    const event = makeEvent({ dashxNotificationId: 'n-close-1' })
+
+    handler.onNotificationClose(event as any)
+    await drain(event)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [ , init ] = fetchMock.mock.calls[0]
+    const parsed = JSON.parse((init as RequestInit).body as string)
+    expect(parsed.variables.input.id).toBe('n-close-1')
+    expect(parsed.variables.input.status).toBe('DISMISSED')
+  })
+
+  it('is a no-op when the notification has no dashxNotificationId', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}'))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const handler = createDashXServiceWorkerHandler(config)
+    const event = makeEvent({})
+
+    handler.onNotificationClose(event as any)
+    await drain(event)
+
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
 

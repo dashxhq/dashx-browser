@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.4
+
+### Fixed
+
+- **`attachForegroundMessaging` now hydrates the service-worker registration.** Previously only `subscribe()` grabbed the registration (from options or `navigator.serviceWorker.ready`) — `attachForegroundMessaging` wired the Firebase listener but left `#serviceWorkerRegistration` null. That meant consumers who wired the listener at app mount (the whole point of `attachForegroundMessaging`) and then received a foreground push *before* calling `subscribe()` got the callback fire but not the system banner. The method now opportunistically resolves `navigator.serviceWorker.ready` when no registration is already cached, so the banner renders on the very first push regardless of subscribe timing.
+- **Notification tap no longer force-reloads an already-at-the-target tab.** When `focusOrOpen` found a same-origin client it was calling `client.focus()` (good) followed by `client.navigate(url)` unconditionally, which caused a pointless full-page reload when the existing tab's URL already matched the target (the common case for URL-less pushes where the fallback target is the SW scope and the tab is at the app root). The reload flash made the tab switch feel like "the tab blinked" rather than "the tab became active." `navigate` now fires only when the URL actually changes, leaving pure focus switches clean.
+
+### Added
+
+- **`DashX.getNotificationPermission(): 'default' | 'granted' | 'denied' | 'unsupported'`** — cheap helper for gating `subscribe()` without running its internal prompt. Previously consumers had to call `subscribe` to discover the permission state, which throws if the user previously denied. Now you can call `if (DashX.getNotificationPermission() === 'granted') DashX.subscribe(...)` at mount without ever triggering the prompt or the throw.
+- **Descriptive error on invalid messaging argument.** `subscribe` and `attachForegroundMessaging` now validate that the `messaging` argument exposes the expected `getToken` / `onMessage` / `deleteToken` methods and throw a clearly attributed error when it doesn't. Previously this surfaced as an opaque `TypeError: messaging.onMessage is not a function` from deep inside the listener wiring.
+- **`registerServiceWorker` option on `subscribe` and `attachForegroundMessaging`.** Pass a SW path (e.g. `'/firebase-messaging-sw.js'`) and the SDK calls `navigator.serviceWorker.register(path)` internally, caches the resulting registration, and reuses it for Firebase's `getToken` and for foreground banner rendering. Previously consumers had to choose between (a) registering the SW manually at app mount before calling `attachForegroundMessaging`, (b) letting Firebase auto-register lazily inside `getToken`'s first call — which meant no SW until Subscribe was clicked, and therefore no foreground banners. The new option makes the registration part of the DashX flow directly. `SubscribeOptions.serviceWorkerRegistration` (an already-registered object) is still supported and takes precedence; `attachForegroundMessaging`'s second argument is a new `AttachForegroundMessagingOptions` object exposing both fields with the same semantics. Non-breaking: omit the new option and the previous lazy behavior is preserved.
+
+### Changed
+
+- **Internal consolidation of the push pipeline.** Registration hydration, payload parsing, callback dispatch, and banner rendering are now split into single-responsibility helpers (`#ensureServiceWorkerRegistration`, `#parsePushPayload`, `#dispatchToPushCallbacks`, `#renderForegroundBanner`) so every entry point (subscribe, attachForegroundMessaging, the inline `onMessage` closure) goes through the same code. Shared defaults (`DEFAULT_BASE_URI`, `TRACK_MESSAGE_STATUS`) and the `DashXPushPayload` type now live in `src/constants.ts` and `src/push-types.ts` respectively — no behavior change, no public API change, just less drift risk between the page-side and service-worker-side handlers. The `SubscribeOptions.tag` field now has an inline doc comment explaining it's forwarded verbatim to the `SubscribeContact` mutation.
+
 ## 0.6.3
 
 ### Fixed

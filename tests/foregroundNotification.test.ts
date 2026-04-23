@@ -169,6 +169,119 @@ describe('foreground notification rendering', () => {
     expect(callback).toHaveBeenCalledWith(expect.objectContaining({ id: 'n-a' }))
   })
 
+  it('attachForegroundMessaging registers the SW from registerServiceWorker path when passed', async () => {
+    // This is the "explicit registration at app mount" flow — consumer wants
+    // the foreground banner to render on the very first push, without waiting
+    // for the Firebase `getToken` call inside `subscribe` to auto-register.
+    const registration = makeRegistration()
+    const registerSpy = vi.fn().mockResolvedValue(registration)
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: {
+        register: registerSpy,
+        ready: new Promise(() => {}), // never resolves — pending state
+      },
+    })
+
+    const client = makeClient()
+    const messaging = makeMessaging()
+
+    client.attachForegroundMessaging(messaging as any, {
+      registerServiceWorker: '/firebase-messaging-sw.js',
+    })
+
+    // Let the register promise resolve
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(registerSpy).toHaveBeenCalledWith('/firebase-messaging-sw.js')
+
+    messaging.__fire({
+      data: { dashx: JSON.stringify({ id: 'n-r1', title: 'Registered', body: 'Banner works' }) },
+    })
+
+    await Promise.resolve()
+
+    expect(registration.showNotification).toHaveBeenCalledWith(
+      'Registered',
+      expect.objectContaining({ body: 'Banner works' }),
+    )
+  })
+
+  it('attachForegroundMessaging uses an explicit serviceWorkerRegistration when passed', async () => {
+    const registration = makeRegistration()
+    const registerSpy = vi.fn()
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: {
+        register: registerSpy,
+        ready: new Promise(() => {}),
+      },
+    })
+
+    const client = makeClient()
+    const messaging = makeMessaging()
+
+    client.attachForegroundMessaging(messaging as any, {
+      serviceWorkerRegistration: registration as any,
+    })
+
+    messaging.__fire({
+      data: { dashx: JSON.stringify({ id: 'n-r2', title: 'Explicit', body: 'No register call' }) },
+    })
+
+    await Promise.resolve()
+
+    // Explicit registration means we never touched navigator.serviceWorker.register
+    expect(registerSpy).not.toHaveBeenCalled()
+    expect(registration.showNotification).toHaveBeenCalledWith(
+      'Explicit',
+      expect.objectContaining({ body: 'No register call' }),
+    )
+  })
+
+  it('attachForegroundMessaging hydrates the SW registration so banners render without subscribe()', async () => {
+    // This is the demo-web / standalone mount scenario: consumer calls
+    // attachForegroundMessaging at bootstrap, never calls subscribe in this
+    // session. The Firebase SW is registered under the hood and exposed via
+    // navigator.serviceWorker.ready — attachForegroundMessaging should pick
+    // that up so the system banner still renders on foreground pushes.
+    const registration = makeRegistration()
+    const originalReady = (navigator as any).serviceWorker?.ready
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: { ready: Promise.resolve(registration) },
+    })
+
+    const client = makeClient()
+    const messaging = makeMessaging()
+
+    client.attachForegroundMessaging(messaging as any)
+
+    // Give the deferred ready-promise hydration a chance to resolve.
+    await Promise.resolve()
+    await Promise.resolve()
+
+    messaging.__fire({
+      data: { dashx: JSON.stringify({ id: 'n-hy', title: 'Hydrated', body: 'Banner works' }) },
+    })
+
+    await Promise.resolve()
+
+    expect(registration.showNotification).toHaveBeenCalledWith(
+      'Hydrated',
+      expect.objectContaining({ body: 'Banner works' }),
+    )
+
+    // Cleanup
+    if (originalReady) {
+      Object.defineProperty(navigator, 'serviceWorker', {
+        configurable: true,
+        value: { ready: originalReady },
+      })
+    }
+  })
+
   it('attachForegroundMessaging replaces a previously wired listener', async () => {
     const client = makeClient()
     const firstMessaging = makeMessaging()

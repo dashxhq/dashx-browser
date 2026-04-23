@@ -58,7 +58,8 @@ const DashX = {
   subscribe(messaging: FirebaseMessaging, options?: SubscribeOptions) { return ensureConfigured().subscribe(messaging, options) },
   unsubscribe() { return ensureConfigured().unsubscribe() },
   onPushNotificationReceived(callback: (_payload: DashXPushPayload) => void) { return ensureConfigured().onPushNotificationReceived(callback) },
-  attachForegroundMessaging(messaging: FirebaseMessaging) { return ensureConfigured().attachForegroundMessaging(messaging) },
+  attachForegroundMessaging(messaging: FirebaseMessaging, options?: Parameters<Client['attachForegroundMessaging']>[1]) { return ensureConfigured().attachForegroundMessaging(messaging, options) },
+  getNotificationPermission() { return ensureConfigured().getNotificationPermission() },
 
   // CMS
   searchRecords(resource: string, options?: any) { return ensureConfigured().searchRecords(resource, options) },

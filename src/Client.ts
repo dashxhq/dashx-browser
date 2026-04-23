@@ -7,6 +7,8 @@ import generateContext from './context'
 import WebSocketManager from './WebSocketManager'
 import { createLogger } from './logging'
 import { getItem, setItem } from './storage'
+import { DEFAULT_BASE_URI, TRACK_MESSAGE_STATUS } from './constants'
+import type { DashXPushPayload } from './push-types'
 import {
   AddItemToCartDocument,
   ApplyCouponToCartDocument,
@@ -140,7 +142,18 @@ type FirebaseMessaging = {
 
 type SubscribeOptions = {
   vapidKey?: string
+  // An already-registered service worker. Takes precedence over
+  // `registerServiceWorker` if both are provided. Forwarded to Firebase's
+  // `getToken` so Firebase reuses it instead of auto-registering.
   serviceWorkerRegistration?: ServiceWorkerRegistration
+  // Path to a service worker script to register before subscribing. The SDK
+  // calls `navigator.serviceWorker.register(path)` and uses the resulting
+  // registration. Most apps pass `'/firebase-messaging-sw.js'`.
+  registerServiceWorker?: string
+  // Tag string associated with the DashX Contact record created or updated by
+  // this subscribe call. Forwarded verbatim to the `SubscribeContact`
+  // mutation's `tag` input field; use it to segment subscriptions (e.g.
+  // "mobile", "web", or a workspace identifier).
   tag?: string
   // When true (default), the SDK calls `registration.showNotification` on
   // foreground pushes so the banner appears even when the app tab is focused.
@@ -152,15 +165,24 @@ type SubscribeOptions = {
   showForegroundNotifications?: boolean
 }
 
-type DashXPushPayload = {
-  id: string
-  title?: string
-  body?: string
-  image?: string
-  url?: string
+type AttachForegroundMessagingOptions = {
+  // An already-registered service worker. Takes precedence over
+  // `registerServiceWorker`. Pass this when your app registers the SW
+  // elsewhere (e.g. a Vite plugin) and you want the SDK to reuse that
+  // registration directly.
+  serviceWorkerRegistration?: ServiceWorkerRegistration
+  // Path to a service worker script to register. The SDK calls
+  // `navigator.serviceWorker.register(path)` internally and uses the
+  // resulting registration to render foreground banners. Pass this when you
+  // want the SW active at app mount, not lazily on first Subscribe click —
+  // without an active SW, `onPushNotificationReceived` still fires but the
+  // system banner can't render. Most apps pass `'/firebase-messaging-sw.js'`.
+  registerServiceWorker?: string
 }
 
 type PushNotificationCallback = (_payload: DashXPushPayload) => void
+
+type NotificationPermissionState = 'default' | 'granted' | 'denied' | 'unsupported'
 
 type TrackMessageParams = {
   id: TrackMessageInput['id']
@@ -213,7 +235,7 @@ class Client {
 
   constructor({
     publicKey,
-    baseUri = 'https://api.dashx.com/graphql',
+    baseUri = DEFAULT_BASE_URI,
     realtimeBaseUri = 'wss://realtime.dashx.com',
     targetEnvironment,
     targetProduct,
@@ -619,6 +641,8 @@ class Client {
     messaging: FirebaseMessaging,
     options?: SubscribeOptions,
   ): Promise<{ id: string; value: string }> {
+    this.#validateMessaging(messaging)
+
     if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
       const permission = await Notification.requestPermission()
       if (permission !== 'granted') {
@@ -626,26 +650,25 @@ class Client {
       }
     }
 
-    const token = await messaging.getToken({
-      vapidKey: options?.vapidKey,
-      serviceWorkerRegistration: options?.serviceWorkerRegistration,
+    // Resolve the preferred registration up-front so we can pass it to
+    // Firebase's `getToken` AND cache it for foreground banner rendering.
+    // Prefers an explicit registration, falls back to registering from a
+    // path, else lets Firebase auto-register inside `getToken`.
+    this.#ensureServiceWorkerRegistration({
+      registration: options?.serviceWorkerRegistration,
+      registerPath: options?.registerServiceWorker,
     })
 
-    // Remember inputs for the foreground `onMessage` path — we need the
-    // registration to call `showNotification` from the page, and the
-    // preference flag gates whether we do that at all.
+    const token = await messaging.getToken({
+      vapidKey: options?.vapidKey,
+      // Reuse whatever we cached above (via explicit option, registerPath,
+      // or a prior attachForegroundMessaging call) so Firebase doesn't
+      // register a second SW at the same scope.
+      serviceWorkerRegistration: options?.serviceWorkerRegistration || this.#serviceWorkerRegistration || undefined,
+    })
+
+    // Remember the foreground render preference before any listener fires.
     this.#showForegroundNotifications = options?.showForegroundNotifications !== false
-    if (options?.serviceWorkerRegistration) {
-      this.#serviceWorkerRegistration = options.serviceWorkerRegistration
-    } else if (typeof navigator !== 'undefined' && navigator.serviceWorker?.ready) {
-      // Consumers that don't pass a registration to `getToken` still have one
-      // Firebase registered under the hood — grab it so foreground rendering
-      // keeps working in both setups. Don't await here; the promise resolves
-      // before a push can plausibly arrive.
-      navigator.serviceWorker.ready
-        .then((registration) => { this.#serviceWorkerRegistration = registration })
-        .catch(() => { /* no SW available; foreground notifications will be skipped */ })
-    }
 
     const savedToken = getItem('fcmToken')
     if (savedToken === token) {
@@ -688,71 +711,162 @@ class Client {
    * Wire Firebase's `messaging.onMessage` foreground listener without going
    * through the `subscribe` flow. Safe to call on every app mount — listeners
    * don't survive page reloads, so consumers who only call `subscribe` behind
-   * a "Enable notifications" button still need a way to rewire after reload.
+   * an "Enable notifications" button still need a way to rewire after reload.
    * No permission prompt, no `getToken`, no DashX registration — just the
    * Firebase listener pipe.
+   *
+   * Pass `options.registerServiceWorker: '/firebase-messaging-sw.js'` (or
+   * `options.serviceWorkerRegistration` if you register elsewhere) to ensure
+   * the foreground system banner renders. Without either, the SDK only hits
+   * `navigator.serviceWorker.ready`, which stays pending until something
+   * else registers an SW — meaning the banner won't render on the first
+   * push if `subscribe` hasn't been called yet.
    */
-  attachForegroundMessaging(messaging: FirebaseMessaging): void {
+  attachForegroundMessaging(messaging: FirebaseMessaging, options?: AttachForegroundMessagingOptions): void {
+    this.#validateMessaging(messaging)
+    this.#ensureServiceWorkerRegistration({
+      registration: options?.serviceWorkerRegistration,
+      registerPath: options?.registerServiceWorker,
+    })
     this.#attachForegroundMessaging(messaging)
+  }
+
+  /**
+   * Returns the current Notification permission state, or `'unsupported'`
+   * when the Notification API is unavailable (non-browser runtime, or very
+   * restricted contexts). Useful for gating `subscribe()` so consumers can
+   * avoid the SDK throwing on a permanently-denied permission.
+   */
+  getNotificationPermission(): NotificationPermissionState {
+    if (typeof Notification === 'undefined') return 'unsupported'
+    return Notification.permission as NotificationPermissionState
+  }
+
+  #validateMessaging(messaging: FirebaseMessaging): void {
+    if (!messaging || typeof messaging.getToken !== 'function' || typeof messaging.onMessage !== 'function') {
+      throw new Error(
+        'DashX: invalid `messaging` argument. Expected an object with `getToken`, `onMessage`, and `deleteToken` methods (see the FirebaseMessaging interface).',
+      )
+    }
+  }
+
+  // Single source of truth for populating `#serviceWorkerRegistration`.
+  // Preference order:
+  //   1. Explicit registration passed in (`options.registration`)
+  //   2. Already-cached registration (early-return)
+  //   3. Register a new SW from `options.registerPath`
+  //   4. Opportunistically resolve `navigator.serviceWorker.ready` if an SW
+  //      was registered elsewhere in the app (e.g. by Firebase's `getToken`)
+  // Both `subscribe` and `attachForegroundMessaging` route through this so
+  // the priority rules live in exactly one place.
+  #ensureServiceWorkerRegistration(options?: {
+    registration?: ServiceWorkerRegistration
+    registerPath?: string
+  }): void {
+    if (options?.registration) {
+      this.#serviceWorkerRegistration = options.registration
+      return
+    }
+    if (this.#serviceWorkerRegistration) return
+    if (typeof navigator === 'undefined' || !navigator.serviceWorker) return
+
+    if (options?.registerPath) {
+      navigator.serviceWorker
+        .register(options.registerPath)
+        .then((registration) => { this.#serviceWorkerRegistration = registration })
+        .catch((error) => { this.logger.error('Error registering service worker:', error) })
+      return
+    }
+
+    if (navigator.serviceWorker.ready) {
+      // Don't await — the promise resolves before a push can plausibly
+      // arrive, and awaiting would stall the subscribe pipeline.
+      navigator.serviceWorker.ready
+        .then((registration) => { this.#serviceWorkerRegistration = registration })
+        .catch(() => { /* no SW available; banner render will be skipped */ })
+    }
+  }
+
+  // Decode the DashX payload the backend encodes under `payload.data.dashx`.
+  // Falls back to Firebase's `payload.notification` shape (used when the push
+  // is delivered as a "notification" message rather than a "data" message).
+  // Returns null when neither shape yields a valid payload — caller skips.
+  #parsePushPayload(payload: any): DashXPushPayload | null {
+    if (payload?.data?.dashx) {
+      try {
+        return JSON.parse(payload.data.dashx) as DashXPushPayload
+      } catch (error) {
+        this.logger.error('Error parsing dashx data payload:', error)
+      }
+    }
+
+    if (payload?.notification) {
+      return {
+        id: payload.messageId || payload.fcmMessageId || '',
+        title: payload.notification.title,
+        body: payload.notification.body,
+        image: payload.notification.image,
+      }
+    }
+
+    return null
+  }
+
+  #dispatchToPushCallbacks(parsed: DashXPushPayload): void {
+    this.#pushNotificationCallbacks.forEach((callback) => {
+      try {
+        callback(parsed)
+      } catch (error) {
+        this.logger.error('Error in push notification callback:', error)
+      }
+    })
+  }
+
+  // Render the foreground system banner via the SW registration. No-ops when
+  // the consumer opted out or when the registration isn't available yet.
+  // Tap handling (CLICKED track + URL navigation) still flows through the
+  // service worker's `onNotificationClick`, regardless of which path showed
+  // the banner.
+  #renderForegroundBanner(parsed: DashXPushPayload): void {
+    if (!this.#showForegroundNotifications) return
+    if (!this.#serviceWorkerRegistration) return
+
+    this.#serviceWorkerRegistration
+      .showNotification(parsed.title || '', {
+        body: parsed.body || '',
+        icon: parsed.image,
+        data: { dashxNotificationId: parsed.id, url: parsed.url },
+      })
+      .catch((error) => {
+        this.logger.error('Error showing foreground notification:', error)
+      })
   }
 
   #attachForegroundMessaging(messaging: FirebaseMessaging): void {
     this.#firebaseMessaging = messaging
+
+    // Opportunistic hydration when the consumer reached us via
+    // `attachForegroundMessaging` rather than `subscribe`. Idempotent — the
+    // helper is a no-op if a registration is already cached.
+    this.#ensureServiceWorkerRegistration()
+
     this.#foregroundMessageUnsubscribe?.()
     this.#foregroundMessageUnsubscribe = messaging.onMessage((payload: any) => {
       this.logger.log('Foreground message received:', JSON.stringify(payload))
 
-      let parsed: DashXPushPayload | null = null
-
-      // Data message: DashX payload is in data.dashx as a JSON string
-      if (payload.data?.dashx) {
-        try {
-          parsed = JSON.parse(payload.data.dashx)
-        } catch (error) {
-          this.logger.error('Error parsing dashx data payload:', error)
-        }
-      }
-
-      // Notification message: Firebase puts content in payload.notification
-      if (!parsed && payload.notification) {
-        parsed = {
-          id: payload.messageId || payload.fcmMessageId || '',
-          title: payload.notification.title,
-          body: payload.notification.body,
-          image: payload.notification.image,
-        }
-      }
-
+      const parsed = this.#parsePushPayload(payload)
       if (!parsed) return
 
+      // DELIVERED is tracked exactly once per push: here on the foreground
+      // path, or in `sw-helper.ts:onBackgroundMessage` on the background
+      // path. Firebase's contract is that the two paths are mutually
+      // exclusive for a given message.
       if (parsed.id) {
-        this.trackMessage({ id: parsed.id, status: 'DELIVERED' })
+        this.trackMessage({ id: parsed.id, status: TRACK_MESSAGE_STATUS.DELIVERED })
       }
 
-      this.#pushNotificationCallbacks.forEach((callback) => {
-        try {
-          callback(parsed)
-        } catch (error) {
-          this.logger.error('Error in push notification callback:', error)
-        }
-      })
-
-      // Foreground visibility: Firebase's `onMessage` fires only when the tab
-      // is focused, and it deliberately doesn't render a system banner. Most
-      // developers don't wire a custom in-app UI, so pushes look "lost" while
-      // the app is open. Call `showNotification` through the SW registration
-      // to match the background behavior unless the consumer opted out.
-      if (this.#showForegroundNotifications && this.#serviceWorkerRegistration) {
-        this.#serviceWorkerRegistration
-          .showNotification(parsed.title || '', {
-            body: parsed.body || '',
-            icon: parsed.image,
-            data: { dashxNotificationId: parsed.id, url: parsed.url },
-          })
-          .catch((error) => {
-            this.logger.error('Error showing foreground notification:', error)
-          })
-      }
+      this.#dispatchToPushCallbacks(parsed)
+      this.#renderForegroundBanner(parsed)
     })
   }
 
@@ -1349,7 +1463,7 @@ class Client {
       case WebsocketMessage.IN_APP_NOTIFICATION:
         // Track that the notification was delivered if accountUid is available
         if (this.#accountUid) {
-          this.trackMessage({ id: _message.data.id, status: 'DELIVERED' })
+          this.trackMessage({ id: _message.data.id, status: TRACK_MESSAGE_STATUS.DELIVERED })
           // Add to cache for immediate UI update
           this.addInAppNotificationToCache(_message.data)
         }

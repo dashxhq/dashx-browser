@@ -1,18 +1,14 @@
+import { DEFAULT_BASE_URI, TRACK_MESSAGE_STATUS, TrackMessageStatusValue } from './constants'
+import type { DashXPushPayload } from './push-types'
+
 type DashXServiceWorkerConfig = {
   publicKey: string
   targetEnvironment: string
   baseUri?: string
 }
 
-type DashXPushPayload = {
-  id: string
-  title?: string
-  body?: string
-  image?: string
-  url?: string
-}
-
-// Service worker event types — kept minimal to avoid requiring webworker lib
+// Service worker event types — kept minimal to avoid requiring the `webworker`
+// TypeScript lib in the consumer build.
 type SWNotificationEvent = {
   notification: { close: () => void; data?: any }
   waitUntil: (_promise: Promise<any>) => void
@@ -34,10 +30,84 @@ type SWClients = {
   openWindow: (_url: string) => Promise<any>
 }
 
-function createDashXServiceWorkerHandler(config: DashXServiceWorkerConfig) {
-  const baseUri = config.baseUri || 'https://api.dashx.com/graphql'
+// Decode the DashX payload the backend encodes under `payload.data.dashx` as
+// a JSON string. Returns null when the field is missing or malformed so the
+// SW doesn't crash on unexpected shapes — silent fail keeps push-receipt
+// resilient to backend drift. Shared helper used by both handlers so both
+// paths decode the payload identically.
+function parseDashXPayload(payload: any): DashXPushPayload | null {
+  const raw = payload?.data?.dashx
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as DashXPushPayload
+  } catch {
+    return null
+  }
+}
 
-  function trackMessage(id: string, status: string) {
+// When the push payload doesn't specify a `url`, fall back to the service
+// worker's registration scope (the app root). Matches Firebase's built-in
+// Chrome behavior where tapping a URL-less push opens the origin; Safari has
+// no such fallback, so without this the tap is a no-op in Safari when the
+// dashboard push has no explicit URL configured.
+function getFallbackUrl(): string | null {
+  try {
+    const swGlobal = (globalThis as unknown) as { registration?: { scope?: string } }
+    const scope = swGlobal.registration?.scope
+    return typeof scope === 'string' && scope.length > 0 ? scope : null
+  } catch {
+    return null
+  }
+}
+
+async function focusOrOpen(url: string, clients: SWClients): Promise<void> {
+  // Try to focus an existing same-origin tab and navigate it before falling
+  // back to `openWindow`. Two reasons this is the production-standard pattern:
+  //   1. UX — repeat pushes shouldn't stack new tabs on top of an
+  //      already-open app (Chrome's default behavior otherwise).
+  //   2. Reliability on Safari, which can silently no-op `openWindow` in
+  //      edge cases — a focused same-origin client succeeds consistently.
+  const target = new URL(url)
+
+  if (clients.matchAll) {
+    try {
+      const windowClients = await clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true,
+      })
+
+      for (const client of windowClients) {
+        try {
+          if (new URL(client.url).origin === target.origin) {
+            await client.focus()
+            // Only navigate when the existing client isn't already at the
+            // target URL. Navigating to the current URL causes a pointless
+            // full-page reload, which reads as "the tab flashed white" rather
+            // than "the tab switched into focus." Skipping the no-op navigate
+            // keeps the focus action clean.
+            if (client.navigate && client.url !== url) {
+              await client.navigate(url)
+            }
+            return
+          }
+        } catch {
+          // Malformed client.url — skip this client and try the next.
+        }
+      }
+    } catch {
+      // matchAll is unavailable or rejected — fall through to openWindow.
+    }
+  }
+
+  if (clients.openWindow) {
+    await clients.openWindow(url)
+  }
+}
+
+function createDashXServiceWorkerHandler(config: DashXServiceWorkerConfig) {
+  const baseUri = config.baseUri || DEFAULT_BASE_URI
+
+  function trackMessage(id: string, status: TrackMessageStatusValue) {
     return fetch(baseUri, {
       method: 'POST',
       headers: {
@@ -60,21 +130,16 @@ function createDashXServiceWorkerHandler(config: DashXServiceWorkerConfig) {
     })
   }
 
-  function onBackgroundMessage(
-    payload: any,
-    registration: SWRegistration,
-  ) {
-    const dashxData = payload.data?.dashx
-    if (!dashxData) return
+  // Called from the Firebase-messaging `onBackgroundMessage` binding. Returns
+  // a Promise so the Firebase SW wrapper can chain it into `event.waitUntil`
+  // itself. DELIVERED is tracked here; the foreground path in `Client.ts`
+  // tracks it in its own `onMessage` handler. Per the Firebase contract the
+  // two paths are mutually exclusive — a single push fires exactly one.
+  function onBackgroundMessage(payload: any, registration: SWRegistration) {
+    const parsed = parseDashXPayload(payload)
+    if (!parsed) return
 
-    let parsed: DashXPushPayload
-    try {
-      parsed = JSON.parse(dashxData)
-    } catch {
-      return
-    }
-
-    const trackPromise = trackMessage(parsed.id, 'DELIVERED')
+    const trackPromise = trackMessage(parsed.id, TRACK_MESSAGE_STATUS.DELIVERED)
     const notifyPromise = registration.showNotification(parsed.title || '', {
       body: parsed.body || '',
       icon: parsed.image,
@@ -86,67 +151,15 @@ function createDashXServiceWorkerHandler(config: DashXServiceWorkerConfig) {
     return Promise.all([ trackPromise, notifyPromise ])
   }
 
-  async function focusOrOpen(url: string, clients: SWClients): Promise<void> {
-    // Try to focus an existing same-origin tab and navigate it before falling
-    // back to `openWindow`. Two reasons this is the production-standard
-    // pattern:
-    //   1. UX — repeat pushes shouldn't stack new tabs on top of an
-    //      already-open app (Chrome's default behavior otherwise).
-    //   2. Reliability on Safari, which can silently no-op `openWindow` in
-    //      edge cases — a focused same-origin client succeeds consistently.
-    const target = new URL(url)
-
-    if (clients.matchAll) {
-      try {
-        const windowClients = await clients.matchAll({
-          type: 'window',
-          includeUncontrolled: true,
-        })
-
-        for (const client of windowClients) {
-          try {
-            if (new URL(client.url).origin === target.origin) {
-              await client.focus()
-              if (client.navigate) {
-                await client.navigate(url)
-              }
-              return
-            }
-          } catch {
-            // Malformed client.url — skip this client and try the next.
-          }
-        }
-      } catch {
-        // matchAll is unavailable or rejected — fall through to openWindow.
-      }
-    }
-
-    if (clients.openWindow) {
-      await clients.openWindow(url)
-    }
-  }
-
-  // When the push payload doesn't specify a `url`, fall back to the service
-  // worker's registration scope (the app root). This matches Firebase's
-  // built-in Chrome behavior where tapping a URL-less push opens the origin.
-  // Safari doesn't have that fallback, so without this the tap was a no-op
-  // in Safari whenever the dashboard push had no explicit URL configured.
-  function getFallbackUrl(): string | null {
-    try {
-      const swGlobal = (globalThis as unknown) as { registration?: { scope?: string } }
-      const scope = swGlobal.registration?.scope
-      return typeof scope === 'string' && scope.length > 0 ? scope : null
-    } catch {
-      return null
-    }
-  }
-
+  // Invoked from `self.addEventListener('notificationclick', ...)`. Returns
+  // void because tracking + navigation are wrapped internally with
+  // `event.waitUntil` — consumers don't need to do anything with the return.
   function onNotificationClick(event: SWNotificationEvent, clients: SWClients) {
     event.notification.close()
     const { dashxNotificationId, url } = event.notification.data || {}
 
     if (dashxNotificationId) {
-      event.waitUntil(trackMessage(dashxNotificationId, 'CLICKED') || Promise.resolve())
+      event.waitUntil(trackMessage(dashxNotificationId, TRACK_MESSAGE_STATUS.CLICKED) || Promise.resolve())
     }
 
     const targetUrl = url || getFallbackUrl()
@@ -163,11 +176,14 @@ function createDashXServiceWorkerHandler(config: DashXServiceWorkerConfig) {
     }
   }
 
+  // Invoked from `self.addEventListener('notificationclose', ...)`. Returns
+  // void — the DISMISSED track promise is attached to `event.waitUntil`
+  // internally so the SW stays alive until the request flushes.
   function onNotificationClose(event: SWNotificationEvent) {
     const { dashxNotificationId } = event.notification.data || {}
 
     if (dashxNotificationId) {
-      event.waitUntil(trackMessage(dashxNotificationId, 'DISMISSED') || Promise.resolve())
+      event.waitUntil(trackMessage(dashxNotificationId, TRACK_MESSAGE_STATUS.DISMISSED) || Promise.resolve())
     }
   }
 
