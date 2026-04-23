@@ -1,12 +1,18 @@
 # Changelog
 
+## 0.6.3
+
+### Fixed
+
+- **Notification tap now works in Safari on URL-less pushes.** The service-worker `onNotificationClick` previously skipped navigation entirely when the payload had no `url` field. Chrome users didn't notice because Firebase's own bundled SW handler defaults to opening the app origin; Safari has no such fallback, so the tap was a silent no-op. The handler now reads `self.registration.scope` as a fallback target when the payload has no URL, matching Chrome's behavior and giving Safari parity when "Show on tap = Yes" is set but no explicit URL is configured.
+
 ## 0.6.2
 
 ### Fixed
 
 - **Foreground push notifications are now visible by default.** Previously, when a push arrived while the app tab was focused, Firebase's `onMessage` fired and the SDK invoked `onPushNotificationReceived` callbacks — but the system banner was not shown unless the consumer explicitly rendered one from their callback. Most apps didn't, so foreground pushes looked "lost." The SDK now calls `registration.showNotification` from the page in foreground using the same shape as the background service-worker path. Consumers that render their own in-app UI can opt out with `subscribe(messaging, { showForegroundNotifications: false })`.
 - **Foreground listener no longer silently dies on page reload.** `subscribe()` used to wire Firebase's `messaging.onMessage` listener only on the "new token" path — when a consumer called `subscribe()` with an unchanged FCM token (the common case on every page reload), the method early-returned before installing the listener. Firebase listeners don't survive the JS scope of a prior page load, so after a reload, foreground pushes were dropped with the tab visible (the service-worker path stayed unaffected for background pushes, which is exactly the "tab hidden works, tab active doesn't" symptom). The listener is now always wired, on both the new-token and already-subscribed paths.
-- **Notification tap reliably opens in Safari.** The service-worker `onNotificationClick` handler previously called `clients.openWindow(url)` unconditionally. Safari's SW implementation rejects or silently no-ops `openWindow` when there's no existing client of the origin, so taps did nothing. The handler now uses the standard `clients.matchAll({ type: 'window', includeUncontrolled: true })` pattern — focuses an existing same-origin tab and `client.navigate`s it to the target URL, falling back to `openWindow` only when no such tab exists. Chrome and Firefox also benefit: repeat pushes no longer stack new tabs on top of an already-open app.
+- **Tab reuse on notification tap.** `onNotificationClick` now uses the standard `clients.matchAll({ type: 'window', includeUncontrolled: true })` pattern — focuses an existing same-origin tab and `client.navigate`s it to the target URL, falling back to `openWindow` only when no such tab exists. Chrome and Firefox no longer stack new tabs on top of an already-open app; Safari is also more reliable when a same-origin client already exists.
 
 ### Added
 

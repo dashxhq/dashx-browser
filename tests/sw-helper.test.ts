@@ -117,11 +117,31 @@ describe('sw-helper onNotificationClick', () => {
     expect(clients.openWindow).not.toHaveBeenCalled()
   })
 
-  it('skips navigation entirely when no URL is in the payload', async () => {
+  it('falls back to the SW registration scope when the payload has no URL (Safari parity with Chrome)', async () => {
+    // Chrome's Firebase SW opens the app origin on tap when no URL is set.
+    // Safari doesn't, so without this fallback, a URL-less push configured
+    // with "Show on tap" would do nothing in Safari. We expose our own fallback
+    // by reading the SW registration scope.
+    vi.stubGlobal('registration', { scope: 'https://app.example.com/' })
     const handler = createDashXServiceWorkerHandler(config)
     const clients = makeClients()
 
     const event = makeEvent({ dashxNotificationId: 'n-5' })
+
+    handler.onNotificationClick(event as any, clients as any)
+    await drain(event)
+
+    expect(clients.openWindow).toHaveBeenCalledWith('https://app.example.com/')
+  })
+
+  it('skips navigation when neither a payload URL nor a registration scope is available', async () => {
+    // If registration.scope isn't exposed (some bundlers, or outside a SW),
+    // nothing should be opened — fail safe rather than throwing.
+    vi.stubGlobal('registration', undefined)
+    const handler = createDashXServiceWorkerHandler(config)
+    const clients = makeClients()
+
+    const event = makeEvent({ dashxNotificationId: 'n-5b' })
 
     handler.onNotificationClick(event as any, clients as any)
     await drain(event)

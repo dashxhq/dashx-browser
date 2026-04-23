@@ -87,14 +87,13 @@ function createDashXServiceWorkerHandler(config: DashXServiceWorkerConfig) {
   }
 
   async function focusOrOpen(url: string, clients: SWClients): Promise<void> {
-    // Try to focus an existing same-origin tab and navigate it. This is the
-    // pattern every production web push integration uses for two reasons:
-    //   1. Safari's SW implementation does not reliably honor
-    //      `clients.openWindow` when there's no existing client of the origin
-    //      — the call resolves with `null` and nothing visible happens. Focus
-    //      + navigate of an already-open tab works consistently.
-    //   2. UX — repeat pushes shouldn't stack new tabs on top of an
-    //      already-open app (Chrome does this today by default).
+    // Try to focus an existing same-origin tab and navigate it before falling
+    // back to `openWindow`. Two reasons this is the production-standard
+    // pattern:
+    //   1. UX — repeat pushes shouldn't stack new tabs on top of an
+    //      already-open app (Chrome's default behavior otherwise).
+    //   2. Reliability on Safari, which can silently no-op `openWindow` in
+    //      edge cases — a focused same-origin client succeeds consistently.
     const target = new URL(url)
 
     if (clients.matchAll) {
@@ -127,6 +126,21 @@ function createDashXServiceWorkerHandler(config: DashXServiceWorkerConfig) {
     }
   }
 
+  // When the push payload doesn't specify a `url`, fall back to the service
+  // worker's registration scope (the app root). This matches Firebase's
+  // built-in Chrome behavior where tapping a URL-less push opens the origin.
+  // Safari doesn't have that fallback, so without this the tap was a no-op
+  // in Safari whenever the dashboard push had no explicit URL configured.
+  function getFallbackUrl(): string | null {
+    try {
+      const swGlobal = (globalThis as unknown) as { registration?: { scope?: string } }
+      const scope = swGlobal.registration?.scope
+      return typeof scope === 'string' && scope.length > 0 ? scope : null
+    } catch {
+      return null
+    }
+  }
+
   function onNotificationClick(event: SWNotificationEvent, clients: SWClients) {
     event.notification.close()
     const { dashxNotificationId, url } = event.notification.data || {}
@@ -135,11 +149,13 @@ function createDashXServiceWorkerHandler(config: DashXServiceWorkerConfig) {
       event.waitUntil(trackMessage(dashxNotificationId, 'CLICKED') || Promise.resolve())
     }
 
-    if (url) {
+    const targetUrl = url || getFallbackUrl()
+
+    if (targetUrl) {
       try {
-        const parsed = new URL(url)
+        const parsed = new URL(targetUrl)
         if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
-          event.waitUntil(focusOrOpen(url, clients))
+          event.waitUntil(focusOrOpen(targetUrl, clients))
         }
       } catch {
         // Invalid URL — ignore
