@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.2
+
+### Fixed
+
+- **Foreground push notifications are now visible by default.** Previously, when a push arrived while the app tab was focused, Firebase's `onMessage` fired and the SDK invoked `onPushNotificationReceived` callbacks — but the system banner was not shown unless the consumer explicitly rendered one from their callback. Most apps didn't, so foreground pushes looked "lost." The SDK now calls `registration.showNotification` from the page in foreground using the same shape as the background service-worker path. Consumers that render their own in-app UI can opt out with `subscribe(messaging, { showForegroundNotifications: false })`.
+- **Foreground listener no longer silently dies on page reload.** `subscribe()` used to wire Firebase's `messaging.onMessage` listener only on the "new token" path — when a consumer called `subscribe()` with an unchanged FCM token (the common case on every page reload), the method early-returned before installing the listener. Firebase listeners don't survive the JS scope of a prior page load, so after a reload, foreground pushes were dropped with the tab visible (the service-worker path stayed unaffected for background pushes, which is exactly the "tab hidden works, tab active doesn't" symptom). The listener is now always wired, on both the new-token and already-subscribed paths.
+- **Notification tap reliably opens in Safari.** The service-worker `onNotificationClick` handler previously called `clients.openWindow(url)` unconditionally. Safari's SW implementation rejects or silently no-ops `openWindow` when there's no existing client of the origin, so taps did nothing. The handler now uses the standard `clients.matchAll({ type: 'window', includeUncontrolled: true })` pattern — focuses an existing same-origin tab and `client.navigate`s it to the target URL, falling back to `openWindow` only when no such tab exists. Chrome and Firefox also benefit: repeat pushes no longer stack new tabs on top of an already-open app.
+
+### Added
+
+- **`DashX.attachForegroundMessaging(messaging)`** — standalone method that wires the `messaging.onMessage` listener without prompting for permission, fetching a token, or registering with DashX. Safe to call on every app mount and idempotent. This gives consumers who only call `subscribe()` behind an "Enable notifications" UI a way to keep foreground pushes flowing after a reload without rerunning the subscribe flow.
+
+### Notes
+
+- **Custom audio** is not supported at the SDK level. The Web Notifications API's `sound` option is ignored by Chrome and Safari, so there is no portable way to deliver a custom sound URL through the system notification. If you need a branded sound effect, add a custom field to the push payload's `data` and play it yourself from the focused tab via `new Audio(url).play()` inside your `onPushNotificationReceived` callback.
+
 ## 0.6.1
 
 ### Fixed

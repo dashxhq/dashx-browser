@@ -142,6 +142,14 @@ type SubscribeOptions = {
   vapidKey?: string
   serviceWorkerRegistration?: ServiceWorkerRegistration
   tag?: string
+  // When true (default), the SDK calls `registration.showNotification` on
+  // foreground pushes so the banner appears even when the app tab is focused.
+  // Set to false if you render your own in-app UI from the
+  // `onPushNotificationReceived` callback and don't want the system banner
+  // duplicating it. Firebase's `onMessage` only fires in foreground — the
+  // service worker's `onBackgroundMessage` handles the hidden-tab case and is
+  // unaffected by this flag.
+  showForegroundNotifications?: boolean
 }
 
 type DashXPushPayload = {
@@ -176,6 +184,10 @@ class Client {
   #foregroundMessageUnsubscribe: (() => void) | null = null
 
   #pushNotificationCallbacks: Set<PushNotificationCallback> = new Set()
+
+  #serviceWorkerRegistration: ServiceWorkerRegistration | null = null
+
+  #showForegroundNotifications: boolean = true
 
   #subscribePromise: Promise<{ id: string; value: string }> | null = null
 
@@ -619,9 +631,30 @@ class Client {
       serviceWorkerRegistration: options?.serviceWorkerRegistration,
     })
 
+    // Remember inputs for the foreground `onMessage` path — we need the
+    // registration to call `showNotification` from the page, and the
+    // preference flag gates whether we do that at all.
+    this.#showForegroundNotifications = options?.showForegroundNotifications !== false
+    if (options?.serviceWorkerRegistration) {
+      this.#serviceWorkerRegistration = options.serviceWorkerRegistration
+    } else if (typeof navigator !== 'undefined' && navigator.serviceWorker?.ready) {
+      // Consumers that don't pass a registration to `getToken` still have one
+      // Firebase registered under the hood — grab it so foreground rendering
+      // keeps working in both setups. Don't await here; the promise resolves
+      // before a push can plausibly arrive.
+      navigator.serviceWorker.ready
+        .then((registration) => { this.#serviceWorkerRegistration = registration })
+        .catch(() => { /* no SW available; foreground notifications will be skipped */ })
+    }
+
     const savedToken = getItem('fcmToken')
     if (savedToken === token) {
       this.logger.log('Already subscribed with this token')
+      // Firebase `onMessage` listeners don't survive page reloads — the JS
+      // scope they were registered in is gone. Rewire on every subscribe
+      // call (even the "already registered with DashX" fast path), otherwise
+      // repeat visits silently drop foreground pushes.
+      this.#attachForegroundMessaging(messaging)
       return { id: '', value: token }
     }
 
@@ -646,9 +679,25 @@ class Client {
     }
 
     setItem('fcmToken', token)
-    this.#firebaseMessaging = messaging
+    this.#attachForegroundMessaging(messaging)
 
-    // Set up foreground message listener
+    return result
+  }
+
+  /**
+   * Wire Firebase's `messaging.onMessage` foreground listener without going
+   * through the `subscribe` flow. Safe to call on every app mount — listeners
+   * don't survive page reloads, so consumers who only call `subscribe` behind
+   * a "Enable notifications" button still need a way to rewire after reload.
+   * No permission prompt, no `getToken`, no DashX registration — just the
+   * Firebase listener pipe.
+   */
+  attachForegroundMessaging(messaging: FirebaseMessaging): void {
+    this.#attachForegroundMessaging(messaging)
+  }
+
+  #attachForegroundMessaging(messaging: FirebaseMessaging): void {
+    this.#firebaseMessaging = messaging
     this.#foregroundMessageUnsubscribe?.()
     this.#foregroundMessageUnsubscribe = messaging.onMessage((payload: any) => {
       this.logger.log('Foreground message received:', JSON.stringify(payload))
@@ -687,9 +736,24 @@ class Client {
           this.logger.error('Error in push notification callback:', error)
         }
       })
-    })
 
-    return result
+      // Foreground visibility: Firebase's `onMessage` fires only when the tab
+      // is focused, and it deliberately doesn't render a system banner. Most
+      // developers don't wire a custom in-app UI, so pushes look "lost" while
+      // the app is open. Call `showNotification` through the SW registration
+      // to match the background behavior unless the consumer opted out.
+      if (this.#showForegroundNotifications && this.#serviceWorkerRegistration) {
+        this.#serviceWorkerRegistration
+          .showNotification(parsed.title || '', {
+            body: parsed.body || '',
+            icon: parsed.image,
+            data: { dashxNotificationId: parsed.id, url: parsed.url },
+          })
+          .catch((error) => {
+            this.logger.error('Error showing foreground notification:', error)
+          })
+      }
+    })
   }
 
   async unsubscribe(): Promise<{ id: string; value: string }> {
