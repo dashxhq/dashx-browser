@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.5
+
+### Added
+
+- **`subscribe()` now sends `metadata` in the `SubscribeContact` mutation** The shape is `{ app: { identifier }, library: { name, version } }`. `app.identifier` is `window.location.origin` (analogous to iOS bundle ID and Android package name). `library` carries `@dashx/browser` + the SDK's `package.json` version, matching what `SystemContext.library` already sends on track/identify so the browser SDK is internally consistent.
+
+### Changed
+
+- **`DashX.unsubscribe()` no longer throws when no FCM token is saved locally.** Previously, calling `unsubscribe()` before `subscribe()` (or after a prior `unsubscribe()` had cleared the token) rejected with `Error('No active push subscription found. Call subscribe() first.')`. It now resolves with `{ success: false }`. Promise rejections are now reserved for transport / SDK-state failures (Firebase `deleteToken` failure, GraphQL or network errors). Consumers who relied on the throw to detect "not subscribed" should branch on the `success` field instead.
+
 ## 0.6.4
 
 ### Fixed
