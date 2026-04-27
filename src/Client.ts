@@ -7,6 +7,7 @@ import generateContext from './context'
 import WebSocketManager from './WebSocketManager'
 import { createLogger } from './logging'
 import { getItem, setItem } from './storage'
+import packageInfo from '../package.json'
 import { DEFAULT_BASE_URI, TRACK_MESSAGE_STATUS } from './constants'
 import type { DashXPushPayload } from './push-types'
 import {
@@ -689,6 +690,7 @@ class Client {
         accountAnonymousUid: this.#accountAnonymousUid,
         userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
         targetEnvironment: this.targetEnvironment,
+        metadata: this.#buildSubscribeMetadata(),
         ...(options?.tag ? { tag: options.tag } : {}),
       },
     }
@@ -787,6 +789,26 @@ class Client {
     }
   }
 
+  // Build the `metadata` JSON the backend stores against the Contact at
+  // subscribe time.
+  // `library.name` is the package's npm name (`@dashx/browser`), matching
+  // what `SystemContext.library.name` already sends on track/identify so
+  // the browser SDK is internally consistent.
+  // Returns the object directly; Apollo serializes it for the JSON scalar.
+  #buildSubscribeMetadata(): Record<string, unknown> {
+    const app: Record<string, unknown> = {}
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      app.identifier = window.location.origin
+    }
+    return {
+      app,
+      library: {
+        name: packageInfo.name,
+        version: packageInfo.version,
+      },
+    }
+  }
+
   // Decode the DashX payload the backend encodes under `payload.data.dashx`.
   // Falls back to Firebase's `payload.notification` shape (used when the push
   // is delivered as a "notification" message rather than a "data" message).
@@ -870,10 +892,15 @@ class Client {
     })
   }
 
-  async unsubscribe(): Promise<{ id: string; value: string }> {
+  async unsubscribe(): Promise<{ success: boolean }> {
     const savedToken = getItem('fcmToken')
     if (!savedToken) {
-      throw new Error('No active push subscription found. Call subscribe() first.')
+      // Legitimate "nothing to unsubscribe" — same semantics as the backend's
+      // "no matching contact" path. Resolve with `success: false` rather than
+      // throwing: a missing local token is not an error,
+      // the device just isn't subscribed in this
+      // session. Errors are reserved for transport / SDK-state failures.
+      return { success: false }
     }
 
     if (this.#firebaseMessaging) {
