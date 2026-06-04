@@ -41,6 +41,7 @@ export interface WebSocketOptions {
 export class WebSocketManager {
   private ws: WebSocket | null = null
   private reconnectAttempts = 0
+  private lastConnectTime = 0
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private heartbeatTimer: ReturnType<typeof setTimeout> | null = null
   private connectionTimeoutTimer: ReturnType<typeof setTimeout> | null = null
@@ -67,7 +68,7 @@ export class WebSocketManager {
 
   constructor(options: WebSocketOptions) {
     this.options = {
-      reconnectInterval: 5000,
+      reconnectInterval: 2000,
       maxReconnectAttempts: 20,
       heartbeatInterval: 10000,
       heartbeatMessage: { type: WebsocketMessage.PING },
@@ -231,6 +232,31 @@ export class WebSocketManager {
       this.logger.log('connect(): skipped — network offline')
       return
     }
+
+    // Throttle every connection attempt to at least `reconnectInterval` apart,
+    // regardless of caller (close-driven retry, visibility change, network
+    // online). If the previous attempt was too recent, defer instead of
+    // connecting immediately — this is what prevents tight reconnect storms.
+    // The very first attempt (lastConnectTime === 0) is never delayed.
+    const sinceLastAttempt = Date.now() - this.lastConnectTime
+    if (this.lastConnectTime !== 0 && sinceLastAttempt < this.options.reconnectInterval) {
+      if (!this.reconnectTimer) {
+        const delay = this.options.reconnectInterval - sinceLastAttempt
+        this.logger.log(`connect(): throttled — next attempt in ${delay}ms`)
+        this.reconnectTimer = setTimeout(() => {
+          this.reconnectTimer = null
+          this.connect()
+        }, delay)
+      }
+      return
+    }
+
+    // Proceeding — cancel any pending throttled retry and stamp this attempt.
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+    this.lastConnectTime = Date.now()
 
     this.logger.log('connect(): proceeding — creating WebSocket', {
       url: this.options.url,
@@ -435,18 +461,12 @@ export class WebSocketManager {
     this.reconnectAttempts++
     this.options.onReconnect(this.reconnectAttempts)
 
-    // Exponential backoff with jitter
-    // const baseDelay = this.options.reconnectInterval
-    // const maxDelay = 30000 // 30 seconds max
-    // const exponentialDelay = Math.min(baseDelay * Math.pow(2, this.reconnectAttempts - 1), maxDelay)
-    // const jitter = Math.random() * 1000 // Add up to 1 second of jitter
-    const finalDelay = 2000
+    this.logger.log(`Scheduling reconnect attempt ${this.reconnectAttempts}`)
 
-    this.logger.log(`Scheduling reconnect attempt ${this.reconnectAttempts} in ${Math.round(finalDelay)}ms`)
-
-    this.reconnectTimer = setTimeout(() => {
-      this.connect()
-    }, finalDelay)
+    // connect() enforces the min-interval throttle, so a fast-failing socket
+    // retries on a steady `reconnectInterval` cadence instead of immediately,
+    // and all reconnect paths share the same timing logic.
+    this.connect()
   }
 
   private startHeartbeat(): void {
