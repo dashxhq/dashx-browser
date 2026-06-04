@@ -1499,7 +1499,11 @@ class Client {
         break
 
       default:
-        this.logger.warn('Unknown WebSocket message type:', _message.type)
+        // Message types the SDK doesn't handle internally are forwarded to the
+        // consumer via the createWebSocketConnection `onMessage` callback, so
+        // there's nothing to do here. Logged at debug level (not `warn`) to
+        // avoid noise for application-specific message types.
+        this.logger.log('Unhandled WebSocket message type:', _message.type)
     }
   }
 }
