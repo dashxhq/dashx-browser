@@ -41,5 +41,5 @@ export default defineConfig(buildTarget === 'sw' ? {
       },
     },
   },
-  plugins: [ dts({ rollupTypes: true }) ],
+  plugins: [ dts({ rollupTypes: false }) ],
 })

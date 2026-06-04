@@ -24,7 +24,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && BUILD_TARGET=sw vite build",
+    "typecheck": "tsc --noEmit",
+    "build": "yarn typecheck && vite build && BUILD_TARGET=sw vite build",
     "preview": "vite preview",
     "codegen": "graphql-codegen && eslint --fix ./src/generated",
     "test": "vitest run",
