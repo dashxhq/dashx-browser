@@ -1,0 +1,8 @@
+query FetchInAppMessages($input: FetchInAppMessagesInput!) {
+  messages: fetchInAppMessages(input: $input) {
+    id
+    sentAt
+    readAt
+    renderedContent
+  }
+}

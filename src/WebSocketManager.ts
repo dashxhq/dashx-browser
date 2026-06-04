@@ -41,11 +41,11 @@ export interface WebSocketOptions {
 export class WebSocketManager {
   private ws: WebSocket | null = null
   private reconnectAttempts = 0
-  private reconnectTimer: NodeJS.Timeout | null = null
-  private heartbeatTimer: NodeJS.Timeout | null = null
-  private connectionTimeoutTimer: NodeJS.Timeout | null = null
-  private pingTimeoutTimer: NodeJS.Timeout | null = null
-  private messageRetryTimer: NodeJS.Timeout | null = null
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private heartbeatTimer: ReturnType<typeof setTimeout> | null = null
+  private connectionTimeoutTimer: ReturnType<typeof setTimeout> | null = null
+  private pingTimeoutTimer: ReturnType<typeof setTimeout> | null = null
+  private messageRetryTimer: ReturnType<typeof setTimeout> | null = null
   private isConnecting = false
   private shouldReconnect = true
   private lastCloseEvent: CloseEvent | null = null
@@ -288,7 +288,7 @@ export class WebSocketManager {
     }
   }
 
-  sendRaw(data: string | ArrayBufferLike | Blob | ArrayBufferView): void {
+  sendRaw(data: string | Blob | BufferSource): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(data)
     } else {

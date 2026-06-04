@@ -1,10 +1,15 @@
-import Client, { WebsocketMessage, DASHX_CLOSE_CODES } from './Client'
+import Client, {
+  WebsocketMessage,
+  isTerminalCloseCode,
+  TERMINAL_CLOSE_CODE_MIN,
+  TERMINAL_CLOSE_CODE_MAX,
+} from './Client'
 import WebSocketManager, { ReadyState } from './WebSocketManager'
 import type {
   ClientParams,
-  InAppNotifications,
+  InAppMessages,
   WebsocketMessageType,
-  InAppNotificationData,
+  InAppMessageData,
   ProductVariantReleaseRule,
   ProductVariantRelease,
   AiAgent,
@@ -47,12 +52,12 @@ const DashX = {
   track(event: string, data?: any) { return ensureConfigured().track(event, data) },
   trackMessage(params: Parameters<Client['trackMessage']>[0]) { return ensureConfigured().trackMessage(params) },
 
-  // In-App Notifications
-  fetchInAppNotifications() { return ensureConfigured().fetchInAppNotifications() },
-  addInAppNotificationToCache(notification: InAppNotificationData) { return ensureConfigured().addInAppNotificationToCache(notification) },
-  watchFetchInAppNotifications(callback: (_data: InAppNotifications) => void) { return ensureConfigured().watchFetchInAppNotifications(callback) },
-  watchFetchInAppNotificationsAggregate(callback: (_data: number) => void) { return ensureConfigured().watchFetchInAppNotificationsAggregate(callback) },
-  onNotification(callback: (_notification: InAppNotificationData) => void) { return ensureConfigured().onNotification(callback) },
+  // In-App Messages
+  fetchInAppMessages() { return ensureConfigured().fetchInAppMessages() },
+  addInAppMessageToCache(message: InAppMessageData) { return ensureConfigured().addInAppMessageToCache(message) },
+  watchFetchInAppMessages(callback: (_data: InAppMessages) => void) { return ensureConfigured().watchFetchInAppMessages(callback) },
+  watchFetchInAppMessagesAggregate(callback: (_data: number) => void) { return ensureConfigured().watchFetchInAppMessagesAggregate(callback) },
+  onInAppMessage(callback: (_message: InAppMessageData) => void) { return ensureConfigured().onInAppMessage(callback) },
 
   // Push Notifications
   subscribe(messaging: FirebaseMessaging, options?: SubscribeOptions) { return ensureConfigured().subscribe(messaging, options) },
@@ -110,7 +115,15 @@ const DashX = {
 }
 
 export default DashX
-export { Client, WebsocketMessage, WebSocketManager, DASHX_CLOSE_CODES, ReadyState }
+export {
+  Client,
+  WebsocketMessage,
+  WebSocketManager,
+  isTerminalCloseCode,
+  TERMINAL_CLOSE_CODE_MIN,
+  TERMINAL_CLOSE_CODE_MAX,
+  ReadyState,
+}
 export type {
   AiAgent,
   AiAgentStarterMessage,
@@ -121,8 +134,8 @@ export type {
   ContactStatus,
   DashXPushPayload,
   FirebaseMessaging,
-  InAppNotificationData,
-  InAppNotifications,
+  InAppMessageData,
+  InAppMessages,
   ProductVariantRelease,
   ProductVariantReleaseRule,
   QueuedMessage,

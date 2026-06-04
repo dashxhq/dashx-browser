@@ -1,5 +1,5 @@
 import uuid from 'uuid-random'
-import { ApolloCache, ApolloClient, ApolloLink, HttpLink, InMemoryCache, NormalizedCacheObject, gql } from '@apollo/client/core'
+import { ApolloCache, ApolloClient, ApolloLink, HttpLink, InMemoryCache, gql } from '@apollo/client/core'
 import { setContext } from '@apollo/client/link/context'
 
 import SearchRecordsInputBuilder, { FetchRecordsOptions, SearchRecordsOptions } from './SearchRecordsInputBuilder'
@@ -16,8 +16,8 @@ import {
   AssetDocument,
   FetchCartDocument,
   FetchContactsDocument,
-  FetchInAppNotificationsAggregateDocument,
-  FetchInAppNotificationsDocument,
+  FetchInAppMessagesAggregateDocument,
+  FetchInAppMessagesDocument,
   FetchProductVariantReleaseDocument,
   FetchProductVariantReleaseRuleDocument,
   FetchRecordDocument,
@@ -38,7 +38,7 @@ import {
 } from './generated'
 import type {
   ContactStubInput,
-  FetchInAppNotificationsQuery,
+  FetchInAppMessagesQuery,
   FetchProductVariantReleaseQuery,
   FetchProductVariantReleaseRuleQuery,
   InvokeAiAgentInput,
@@ -54,12 +54,23 @@ const UPLOAD_RETRY_LIMIT = 5
 const UPLOAD_RETRY_TIMEOUT = 3000
 const UNIDENTIFIED_USER_ERROR = 'This operation can be performed only by an identified user. Ensure `dashx.identify` is run before calling this method.'
 
-// DashX WebSocket close codes
-const DASHX_CLOSE_CODES = [
-  40000, // Bad request
-  40001, // Invalid Data
-  50000  // Internal server error
-] as const
+// Terminal close-code band. When the server closes the socket with a code in
+// this range, the failure is terminal (bad credentials, missing account,
+// forbidden) — reconnecting can't change the outcome, so the SDK stops.
+// Everything else (network drops, abnormal 1006, internal errors) keeps
+// retrying.
+//
+// This is intentionally a *range*, not a fixed list: the server can introduce
+// new terminal codes (4401 ~ HTTP 401, 4403 ~ HTTP 403, etc.) without an SDK
+// update. The codes must sit in 4000-4999 (the only application range browsers
+// expose to JS), and the specific app-error code (e.g. 40100/40300) travels in
+// the close *reason*, not the code.
+const TERMINAL_CLOSE_CODE_MIN = 4400
+const TERMINAL_CLOSE_CODE_MAX = 4499
+
+const isTerminalCloseCode = (code: number): boolean => (
+  code >= TERMINAL_CLOSE_CODE_MIN && code <= TERMINAL_CLOSE_CODE_MAX
+)
 
 type ClientParams = {
   baseUri?: string,
@@ -82,9 +93,9 @@ type SubscriptionSucceededData = {
   channel: string,
 }
 
-type InAppNotifications = FetchInAppNotificationsQuery['notifications']
+type InAppMessages = FetchInAppMessagesQuery['messages']
 
-type InAppNotificationData = Pick<FetchInAppNotificationsQuery['notifications'][0], 'id' | 'readAt' | 'renderedContent' | 'sentAt'>
+type InAppMessageData = Pick<FetchInAppMessagesQuery['messages'][0], 'id' | 'readAt' | 'renderedContent' | 'sentAt'>
 
 type ProductVariantReleaseRule = FetchProductVariantReleaseRuleQuery['productVariantReleaseRule']
 
@@ -121,7 +132,7 @@ enum WebsocketMessage {
   CONNECTED = 'CONNECTED',
   SUBSCRIBE = 'SUBSCRIBE',
   SUBSCRIPTION_SUCCEEDED = 'SUBSCRIPTION_SUCCEEDED',
-  IN_APP_NOTIFICATION = 'IN_APP_NOTIFICATION',
+  IN_APP_MESSAGE = 'IN_APP_MESSAGE',
   PRODUCT_VARIANT_RELEASE_RULE_UPDATED = 'PRODUCT_VARIANT_RELEASE_RULE_UPDATED',
 }
 /* eslint-enable no-unused-vars */
@@ -132,7 +143,7 @@ type WebsocketMessageType =
   | { type: WebsocketMessage.CONNECTED, data: ConnectionData }
   | { type: WebsocketMessage.SUBSCRIBE, data: SubscribeData }
   | { type: WebsocketMessage.SUBSCRIPTION_SUCCEEDED, data: SubscriptionSucceededData }
-  | { type: WebsocketMessage.IN_APP_NOTIFICATION, data: InAppNotificationData }
+  | { type: WebsocketMessage.IN_APP_MESSAGE, data: InAppMessageData }
   | { type: WebsocketMessage.PRODUCT_VARIANT_RELEASE_RULE_UPDATED, data: ProductVariantReleaseRule }
 
 type FirebaseMessaging = {
@@ -200,7 +211,7 @@ class Client {
 
   #websocketManager: WebSocketManager | null = null
 
-  #notificationCallbacks: Set<(_notification: InAppNotificationData) => void> = new Set()
+  #messageCallbacks: Set<(_message: InAppMessageData) => void> = new Set()
 
   #firebaseMessaging: FirebaseMessaging | null = null
 
@@ -216,7 +227,7 @@ class Client {
 
   #watchedQueries: Set<{ refetch: () => void; name: string }> = new Set()
 
-  graphqlClient!: ApolloClient<NormalizedCacheObject>
+  graphqlClient!: ApolloClient
 
   baseUri: string
 
@@ -279,9 +290,9 @@ class Client {
 
     setItem('accountUid', this.#accountUid)
 
-    // If WebSocket is connected and we just set an accountUid, subscribe to notifications
+    // If WebSocket is connected and we just set an accountUid, subscribe to in-app messages
     if (this.#accountUid && this.#websocketManager?.isConnected) {
-      this.subscribeToNotifications()
+      this.subscribeToInAppMessages()
     }
   }
 
@@ -314,7 +325,7 @@ class Client {
     this.graphqlClient = new ApolloClient({
       link: ApolloLink.from([ authLink, httpLink ]),
       cache: new InMemoryCache(),
-      connectToDevTools: true,
+      devtools: { enabled: true },
       defaultOptions: {
         watchQuery: {
           fetchPolicy: 'cache-and-network',
@@ -406,22 +417,22 @@ class Client {
         throw new Error(UNIDENTIFIED_USER_ERROR)
       }
 
-      update = (cache: ApolloCache<InMemoryCache>) => {
+      update = (cache: ApolloCache) => {
         cache.writeFragment({
           data: {
             id,
             readAt: status === 'UNREAD' ? null : new Date(),
-            __typename: 'Notification',
+            __typename: 'Message',
           },
           fragment: gql`
-            fragment UpdateNotification on Notification {
+            fragment UpdateMessage on Message {
               id
               readAt
             }
           `,
         })
 
-        const fetchInAppNotificationsAggregateVariables = {
+        const fetchInAppMessagesAggregateVariables = {
           input: {
             accountUid: this.#accountUid!,
             filter: {
@@ -430,9 +441,9 @@ class Client {
           },
         }
 
-        const unreadNotificationsAggregate = cache.readQuery({
-          query: FetchInAppNotificationsAggregateDocument,
-          variables: fetchInAppNotificationsAggregateVariables,
+        const unreadMessagesAggregate = cache.readQuery({
+          query: FetchInAppMessagesAggregateDocument,
+          variables: fetchInAppMessagesAggregateVariables,
         })
 
         let counter = 0
@@ -443,14 +454,14 @@ class Client {
         }
 
         cache.writeQuery({
-          query: FetchInAppNotificationsAggregateDocument,
+          query: FetchInAppMessagesAggregateDocument,
           data: {
-            notificationsAggregate: {
-              __typename: 'FetchInAppNotificationsAggregateResponse',
-              count: (unreadNotificationsAggregate?.notificationsAggregate.count || 0) + counter,
+            messagesAggregate: {
+              __typename: 'FetchInAppMessagesAggregateResponse',
+              count: (unreadMessagesAggregate?.messagesAggregate.count || 0) + counter,
             },
           },
-          variables: fetchInAppNotificationsAggregateVariables,
+          variables: fetchInAppMessagesAggregateVariables,
         })
       }
     }
@@ -462,20 +473,20 @@ class Client {
     })
   }
 
-  async fetchInAppNotifications() {
+  async fetchInAppMessages() {
     if (!this.#accountUid) {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
 
-    const fetchInAppNotificationsVariables = {
+    const fetchInAppMessagesVariables = {
       input: {
         accountUid: this.#accountUid,
       },
     }
 
-    const fetchInAppNotificationsAggregateVariables = {
+    const fetchInAppMessagesAggregateVariables = {
       input: {
-        ...fetchInAppNotificationsVariables.input,
+        ...fetchInAppMessagesVariables.input,
         filter: {
           readAt: 'null',
         },
@@ -484,70 +495,70 @@ class Client {
 
     await Promise.all([
       this.graphqlClient.query({
-        query: FetchInAppNotificationsDocument,
-        variables: fetchInAppNotificationsVariables,
+        query: FetchInAppMessagesDocument,
+        variables: fetchInAppMessagesVariables,
       }),
       this.graphqlClient.query({
-        query: FetchInAppNotificationsAggregateDocument,
-        variables: fetchInAppNotificationsAggregateVariables,
+        query: FetchInAppMessagesAggregateDocument,
+        variables: fetchInAppMessagesAggregateVariables,
       }),
     ])
   }
 
-  addInAppNotificationToCache(notification: InAppNotificationData): void {
+  addInAppMessageToCache(message: InAppMessageData): void {
     if (!this.#accountUid) {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
 
-    const fetchInAppNotificationsVariables = {
+    const fetchInAppMessagesVariables = {
       input: {
         accountUid: this.#accountUid,
       },
     }
 
-    const existingNotifications = this.graphqlClient.readQuery({
-      query: FetchInAppNotificationsDocument,
-      variables: fetchInAppNotificationsVariables,
+    const existingMessages = this.graphqlClient.readQuery({
+      query: FetchInAppMessagesDocument,
+      variables: fetchInAppMessagesVariables,
     })
 
     this.graphqlClient.writeQuery({
-      query: FetchInAppNotificationsDocument,
+      query: FetchInAppMessagesDocument,
       data: {
-        notifications: [
-          { ...notification, __typename: 'Notification' },
-          ...existingNotifications?.notifications || [],
+        messages: [
+          { ...message, __typename: 'Message' },
+          ...existingMessages?.messages || [],
         ],
       },
-      variables: fetchInAppNotificationsVariables,
+      variables: fetchInAppMessagesVariables,
     })
 
-    const fetchInAppNotificationsAggregateVariables = {
+    const fetchInAppMessagesAggregateVariables = {
       input: {
-        ...fetchInAppNotificationsVariables.input,
+        ...fetchInAppMessagesVariables.input,
         filter: {
           readAt: 'null',
         },
       },
     }
 
-    const unreadNotificationsAggregate = this.graphqlClient.readQuery({
-      query: FetchInAppNotificationsAggregateDocument,
-      variables: fetchInAppNotificationsAggregateVariables,
+    const unreadMessagesAggregate = this.graphqlClient.readQuery({
+      query: FetchInAppMessagesAggregateDocument,
+      variables: fetchInAppMessagesAggregateVariables,
     })
 
     this.graphqlClient.writeQuery({
-      query: FetchInAppNotificationsAggregateDocument,
+      query: FetchInAppMessagesAggregateDocument,
       data: {
-        notificationsAggregate: {
-          __typename: 'FetchInAppNotificationsAggregateResponse',
-          count: (unreadNotificationsAggregate?.notificationsAggregate.count || 0) + 1,
+        messagesAggregate: {
+          __typename: 'FetchInAppMessagesAggregateResponse',
+          count: (unreadMessagesAggregate?.messagesAggregate.count || 0) + 1,
         },
       },
-      variables: fetchInAppNotificationsAggregateVariables,
+      variables: fetchInAppMessagesAggregateVariables,
     })
   }
 
-  watchFetchInAppNotifications(callback: (_data: InAppNotifications) => void): () => void {
+  watchFetchInAppMessages(callback: (_data: InAppMessages) => void): () => void {
     if (!this.#accountUid) {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
@@ -559,20 +570,20 @@ class Client {
     }
 
     const observableQuery = this.graphqlClient.watchQuery({
-      query: FetchInAppNotificationsDocument,
+      query: FetchInAppMessagesDocument,
       variables,
     })
 
     // Register this query for automatic refetch on WebSocket reconnection
     this.registerWatchedQuery(() => {
       observableQuery.refetch()
-    }, 'watchFetchInAppNotifications')
+    }, 'watchFetchInAppMessages')
 
     const subscription = observableQuery.subscribe({
-      next(_response) {
-        callback(_response.data?.notifications)
+      next(_response: any) {
+        callback(_response.data?.messages ?? [])
       },
-      error: (_err) => {
+      error: (_err: any) => {
         this.logger.error(_err)
         callback([])
       },
@@ -580,11 +591,11 @@ class Client {
 
     return () => {
       subscription.unsubscribe()
-      this.unregisterWatchedQuery('watchFetchInAppNotifications')
+      this.unregisterWatchedQuery('watchFetchInAppMessages')
     }
   }
 
-  watchFetchInAppNotificationsAggregate(callback: (_data: number) => void): () => void {
+  watchFetchInAppMessagesAggregate(callback: (_data: number) => void): () => void {
     if (!this.#accountUid) {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
@@ -599,20 +610,20 @@ class Client {
     }
 
     const observableQuery = this.graphqlClient.watchQuery({
-      query: FetchInAppNotificationsAggregateDocument,
+      query: FetchInAppMessagesAggregateDocument,
       variables,
     })
 
     // Register this query for automatic refetch on WebSocket reconnection
     this.registerWatchedQuery(() => {
       observableQuery.refetch()
-    }, 'watchFetchInAppNotificationsAggregate')
+    }, 'watchFetchInAppMessagesAggregate')
 
     const subscription = observableQuery.subscribe({
-      next(_response) {
-        callback(_response.data?.notificationsAggregate.count || 0)
+      next(_response: any) {
+        callback(_response.data?.messagesAggregate.count || 0)
       },
-      error: (_err) => {
+      error: (_err: any) => {
         this.logger.error(_err)
         callback(0)
       },
@@ -620,7 +631,7 @@ class Client {
 
     return () => {
       subscription.unsubscribe()
-      this.unregisterWatchedQuery('watchFetchInAppNotificationsAggregate')
+      this.unregisterWatchedQuery('watchFetchInAppMessagesAggregate')
     }
   }
 
@@ -1210,7 +1221,7 @@ class Client {
       variables,
     })
 
-    return response?.data?.productVariantRelease
+    return response.data!.productVariantRelease
   }
 
   async loadAiAgent({publicEmbedKey}: Pick<LoadAiAgentInput, 'publicEmbedKey'>): Promise<AiAgent> {
@@ -1230,11 +1241,11 @@ class Client {
       variables,
     })
 
-    if (response?.errors && response.errors.length > 0) {
-      throw new Error(response.errors[0].message || 'Failed to load AI agent')
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to load AI agent')
     }
 
-    return response?.data?.loadAiAgent
+    return response.data!.loadAiAgent
   }
 
   async invokeAiAgent({conversationId, prompt, publicEmbedKey}: Pick<InvokeAiAgentInput, 'conversationId' | 'prompt' | 'publicEmbedKey'>): Promise<AiNotification> {
@@ -1259,11 +1270,11 @@ class Client {
       variables,
     })
 
-    if (response?.errors && response.errors.length > 0) {
-      throw new Error(response.errors[0].message || 'Failed to invoke AI agent')
+    if (response.error) {
+      throw new Error(response.error.message || 'Failed to invoke AI agent')
     }
 
-    return response?.data?.invokeAiAgent
+    return response.data!.invokeAiAgent
   }
 
   async fetchProductVariantReleaseRule(): Promise<ProductVariantReleaseRule> {
@@ -1283,7 +1294,7 @@ class Client {
       variables,
     })
 
-    return response?.data?.productVariantReleaseRule
+    return response.data!.productVariantReleaseRule
   }
 
   watchFetchProductVariantReleaseRule(callback: (_data: ProductVariantReleaseRule | null) => void): void {
@@ -1309,10 +1320,10 @@ class Client {
     }, 'watchFetchProductVariantReleaseRule')
 
     observableQuery.subscribe({
-      next(_response) {
-        callback(_response.data?.productVariantReleaseRule)
+      next(_response: any) {
+        callback(_response.data?.productVariantReleaseRule ?? null)
       },
-      error: (_err) => {
+      error: (_err: any) => {
         this.logger.error(_err)
         callback(null)
       },
@@ -1362,22 +1373,22 @@ class Client {
     })
   }
 
-  // Notification callback management
-  onNotification(callback: (_notification: InAppNotificationData) => void): () => void {
-    this.#notificationCallbacks.add(callback)
+  // In-app message callback management
+  onInAppMessage(callback: (_message: InAppMessageData) => void): () => void {
+    this.#messageCallbacks.add(callback)
 
     // Return unsubscribe function
     return () => {
-      this.#notificationCallbacks.delete(callback)
+      this.#messageCallbacks.delete(callback)
     }
   }
 
-  private notifyCallbacks(notification: InAppNotificationData): void {
-    this.#notificationCallbacks.forEach(callback => {
+  private notifyMessageCallbacks(message: InAppMessageData): void {
+    this.#messageCallbacks.forEach(callback => {
       try {
-        callback(notification)
+        callback(message)
       } catch (error) {
-        this.logger.error('Error in notification callback:', error)
+        this.logger.error('Error in in-app message callback:', error)
       }
     })
   }
@@ -1406,8 +1417,8 @@ class Client {
     const wsManager = new WebSocketManager({
       url,
       onOpen: () => {
-        // Automatically subscribe to notifications
-        this.subscribeToNotifications(wsManager)
+        // Automatically subscribe to in-app messages
+        this.subscribeToInAppMessages(wsManager)
         // Trigger refetch of all watched queries when WebSocket connects
         setTimeout(() => {
           this.refetchWatchedQueries()
@@ -1439,12 +1450,12 @@ class Client {
         options?.onReconnectFailed?.()
       },
       shouldReconnect: options?.shouldReconnect ?? ((closeEvent: CloseEvent) => {
-        // Don't retry on DashX-specific error codes
-        if (DASHX_CLOSE_CODES.includes(closeEvent.code as any)) {
-          this.logger.warn(`WebSocket closed with DashX error code ${closeEvent.code}, not retrying`)
+        // Don't retry on terminal close codes (auth / permission failures).
+        if (isTerminalCloseCode(closeEvent.code)) {
+          this.logger.warn(`WebSocket closed with terminal code ${closeEvent.code}, not retrying`)
           return false
         }
-        // Retry for other close codes (network issues, etc.)
+        // Retry for everything else (network drops, abnormal 1006, etc.)
         return true
       }),
     })
@@ -1452,7 +1463,7 @@ class Client {
     return wsManager
   }
 
-  private subscribeToNotifications(wsManager?: WebSocketManager): void {
+  private subscribeToInAppMessages(wsManager?: WebSocketManager): void {
     const manager = wsManager || this.#websocketManager
     if (!manager) {
       return
@@ -1484,18 +1495,18 @@ class Client {
         break
 
       case WebsocketMessage.SUBSCRIPTION_SUCCEEDED:
-        this.logger.log('Successfully subscribed to notifications')
+        this.logger.log('Successfully subscribed to in-app messages')
         break
 
-      case WebsocketMessage.IN_APP_NOTIFICATION:
-        // Track that the notification was delivered if accountUid is available
+      case WebsocketMessage.IN_APP_MESSAGE:
+        // Track that the message was delivered if accountUid is available
         if (this.#accountUid) {
           this.trackMessage({ id: _message.data.id, status: TRACK_MESSAGE_STATUS.DELIVERED })
           // Add to cache for immediate UI update
-          this.addInAppNotificationToCache(_message.data)
+          this.addInAppMessageToCache(_message.data)
         }
         // Notify all registered callbacks
-        this.notifyCallbacks(_message.data)
+        this.notifyMessageCallbacks(_message.data)
         break
 
       default:
@@ -1509,5 +1520,5 @@ class Client {
 }
 
 export default Client
-export { WebsocketMessage, DASHX_CLOSE_CODES }
-export type { ClientParams, InAppNotifications, WebsocketMessageType, InAppNotificationData, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiNotification, AiAgentStarterMessage, AiAgentStarterSuggestion, DashXPushPayload, FirebaseMessaging, SubscribeOptions }
+export { WebsocketMessage, isTerminalCloseCode, TERMINAL_CLOSE_CODE_MIN, TERMINAL_CLOSE_CODE_MAX }
+export type { ClientParams, InAppMessages, WebsocketMessageType, InAppMessageData, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiNotification, AiAgentStarterMessage, AiAgentStarterSuggestion, DashXPushPayload, FirebaseMessaging, SubscribeOptions }

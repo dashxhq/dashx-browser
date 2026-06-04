@@ -1,0 +1,5 @@
+query FetchInAppMessagesAggregate($input: FetchInAppMessagesAggregateInput!) {
+  messagesAggregate: fetchInAppMessagesAggregate(input: $input) {
+    count
+  }
+}
