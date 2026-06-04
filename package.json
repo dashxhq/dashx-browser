@@ -9,15 +9,15 @@
   ],
   "main": "./dist/index.umd.js",
   "module": "./dist/index.es.js",
-  "types": "./dist/index.es.d.ts",
+  "types": "./dist/src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.es.d.ts",
+      "types": "./dist/src/index.d.ts",
       "import": "./dist/index.es.js",
       "require": "./dist/index.umd.js"
     },
     "./sw": {
-      "types": "./dist/sw-helper.d.ts",
+      "types": "./dist/src/sw-helper.d.ts",
       "import": "./dist/sw-helper.es.js",
       "require": "./dist/sw-helper.umd.js"
     }
