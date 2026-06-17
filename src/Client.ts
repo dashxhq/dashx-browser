@@ -176,6 +176,7 @@ enum WebsocketMessage {
   PONG = 'PONG',
   CONNECTED = 'CONNECTED',
   SUBSCRIBE = 'SUBSCRIBE',
+  UNSUBSCRIBE = 'UNSUBSCRIBE',
   SUBSCRIPTION_SUCCEEDED = 'SUBSCRIPTION_SUCCEEDED',
   IN_APP_MESSAGE = 'IN_APP_MESSAGE',
   IN_APP_CHAT_MESSAGE = 'IN_APP_CHAT_MESSAGE',
@@ -188,6 +189,7 @@ type WebsocketMessageType =
   | { type: WebsocketMessage.PONG }
   | { type: WebsocketMessage.CONNECTED, data: ConnectionData }
   | { type: WebsocketMessage.SUBSCRIBE, data: SubscribeData }
+  | { type: WebsocketMessage.UNSUBSCRIBE, data: SubscribeData }
   | { type: WebsocketMessage.SUBSCRIPTION_SUCCEEDED, data: SubscriptionSucceededData }
   | { type: WebsocketMessage.IN_APP_MESSAGE, data: InAppMessageData }
   | { type: WebsocketMessage.IN_APP_CHAT_MESSAGE, data: InAppChatMessageData }
@@ -465,6 +467,15 @@ class Client {
   }
 
   setIdentity(uid?: string | null, token?: string | null): void {
+    // Back-compat: a zero-arg `setIdentity()` clears identity (log out), as it
+    // did before per-argument semantics were added.
+    // eslint-disable-next-line prefer-rest-params
+    if (arguments.length === 0) {
+      this.accountUid = null
+      this.identityToken = null
+      return
+    }
+
     // `undefined` means "leave unchanged"; `null` means "explicitly clear". So
     // updating only the token (uid omitted) must not wipe an existing account
     // uid, and vice versa.
@@ -1587,6 +1598,15 @@ class Client {
       unsubscribe: () => {
         clearTimeout(timeout)
         this.#chatChannelSubscriptions.delete(subscription)
+        // Tell the server to stop forwarding this channel; without it the
+        // subscription lives on the socket until disconnect and events keep
+        // arriving at the page-level `onMessage`.
+        if (this.#activeWebsocketManager?.isConnected) {
+          this.#activeWebsocketManager.send({
+            type: WebsocketMessage.UNSUBSCRIBE,
+            data: { channelName },
+          })
+        }
       },
     }
   }
