@@ -10,6 +10,10 @@ import type {
   InAppMessages,
   WebsocketMessageType,
   InAppMessageData,
+  InAppChatMessageData,
+  StartInAppChatConversationArgs,
+  SendInAppChatMessageArgs,
+  FetchInAppChatMessagesArgs,
   ProductVariantReleaseRule,
   ProductVariantRelease,
   AiAgent,
@@ -98,6 +102,12 @@ const DashX = {
   loadAiAgent(options: { publicEmbedKey: string }) { return ensureConfigured().loadAiAgent(options) },
   invokeAiAgent(options: { publicEmbedKey: string; prompt: string; conversationId?: string }) { return ensureConfigured().invokeAiAgent(options) },
 
+  // InApp Chat
+  startInAppChatConversation(args: StartInAppChatConversationArgs) { return ensureConfigured().startInAppChatConversation(args) },
+  sendInAppChatMessage(args: SendInAppChatMessageArgs) { return ensureConfigured().sendInAppChatMessage(args) },
+  fetchInAppChatMessages(args: FetchInAppChatMessagesArgs) { return ensureConfigured().fetchInAppChatMessages(args) },
+  subscribeToChannel(channelName: string, handler: (_message: InAppChatMessageData) => void, options?: { onReconnectAck?: () => void }) { return ensureConfigured().subscribeToChannel(channelName, handler, options) },
+
   // WebSocket
   connectWebSocket() { return ensureConfigured().connectWebSocket() },
   disconnectWebSocket() { return ensureConfigured().disconnectWebSocket() },
@@ -133,10 +143,14 @@ export type {
   ContactKind,
   ContactStatus,
   DashXPushPayload,
+  FetchInAppChatMessagesArgs,
   FirebaseMessaging,
+  InAppChatMessageData,
   InAppMessageData,
   InAppMessages,
   ProductVariantRelease,
+  SendInAppChatMessageArgs,
+  StartInAppChatConversationArgs,
   ProductVariantReleaseRule,
   QueuedMessage,
   SubscribeOptions,
