@@ -468,31 +468,39 @@ class Client {
 
   setIdentity(uid?: string | null, token?: string | null): void {
     // Back-compat: a zero-arg `setIdentity()` clears identity (log out), as it
-    // did before per-argument semantics were added.
+    // did before per-argument semantics were added. Routed through the normal
+    // path below (as an explicit null clear) so logout also refreshes the socket
+    // and drops the old token, rather than returning early.
     // eslint-disable-next-line prefer-rest-params
-    if (arguments.length === 0) {
-      this.accountUid = null
-      this.identityToken = null
-      return
-    }
+    const loggingOut = arguments.length === 0
+    const nextUid = loggingOut ? null : uid
+    const nextToken = loggingOut ? null : token
 
     // `undefined` means "leave unchanged"; `null` means "explicitly clear". So
     // updating only the token (uid omitted) must not wipe an existing account
     // uid, and vice versa.
-    const tokenChanged = token !== undefined && token !== this.#identityToken
-    if (uid !== undefined) {
-      this.accountUid = uid
+    const tokenChanged = nextToken !== undefined && nextToken !== this.#identityToken
+    if (nextUid !== undefined) {
+      this.accountUid = nextUid
     }
-    if (token !== undefined) {
-      this.identityToken = token
+    if (nextToken !== undefined) {
+      this.identityToken = nextToken
+    }
+
+    // A cleared token (logout) must drop chat subscriptions so they aren't
+    // re-sent on reconnect and keep delivering the previous visitor's events. A
+    // token refresh for the same visitor keeps them (re-subscribed on reconnect).
+    if (tokenChanged && nextToken === null) {
+      this.#chatChannelSubscriptions.clear()
     }
 
     // Reconnect the client-managed socket (`connectWebSocket`) so the server
-    // picks up the new identity token on the WS connection — InApp Chat
-    // ownership keys off it. SCOPE: this covers only `#websocketManager`.
-    // Consumers who own their socket via `createWebSocketConnection` (e.g.
-    // @dashx/react's provider) must reconnect on identity change themselves —
-    // the client can't safely recreate a socket whose handlers it doesn't own.
+    // re-resolves the visitor — or drops them, on logout — from the new token;
+    // InApp Chat ownership keys off it. SCOPE: this covers only
+    // `#websocketManager`. Consumers who own their socket via
+    // `createWebSocketConnection` (e.g. @dashx/react's provider) must reconnect
+    // on identity change themselves — the client can't safely recreate a socket
+    // whose handlers it doesn't own.
     if (tokenChanged && this.#websocketManager?.isConnected) {
       this.logger.log('Identity token changed while WS is open — reconnecting')
       this.disconnectWebSocket()
