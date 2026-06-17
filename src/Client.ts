@@ -514,8 +514,11 @@ class Client {
 
   reset(): void {
     this.accountAnonymousUid = uuid()
-    this.accountUid = null
-    this.identityToken = null
+    // Clear identity via `setIdentity()` so chat subscriptions are dropped and
+    // the client-managed socket reconnects under the new anonymous identity. A
+    // direct `accountUid`/`identityToken` reset would leave the socket
+    // authenticated and still receiving the previous visitor's chat events.
+    this.setIdentity()
     this.#foregroundMessageUnsubscribe?.()
     this.#foregroundMessageUnsubscribe = null
     this.#firebaseMessaging = null
