@@ -250,7 +250,7 @@ type TrackMessageParams = {
 }
 
 // InApp Chat operations. Inlined via `gql` (rather than codegen'd documents)
-// so the SDK builds without a live backend to introspect; the matching
+// so the SDK builds without introspecting a live GraphQL schema; the matching
 // `src/graphql/*.gql` files remain the source for typed codegen if wired later.
 const START_IN_APP_CHAT_CONVERSATION = gql`
   mutation StartInAppChatConversation($identityId: UUID!, $clientIdempotencyKey: String!, $content: JSON, $clientMessageId: String, $data: JSON) {
@@ -477,7 +477,7 @@ class Client {
     }
 
     // Reconnect the client-managed socket (`connectWebSocket`) so the server
-    // re-resolves `request_meta.identity_id` from the new token — InApp Chat
+    // picks up the new identity token on the WS connection — InApp Chat
     // ownership keys off it. SCOPE: this covers only `#websocketManager`.
     // Consumers who own their socket via `createWebSocketConnection` (e.g.
     // @dashx/react's provider) must reconnect on identity change themselves —
@@ -915,8 +915,8 @@ class Client {
     }
   }
 
-  // Build the `metadata` JSON the backend stores against the Contact at
-  // subscribe time.
+  // Build the `metadata` JSON sent at subscribe time and recorded against
+  // the Contact.
   // `library.name` is the package's npm name (`@dashx/browser`), matching
   // what `SystemContext.library.name` already sends on track/identify so
   // the browser SDK is internally consistent.
@@ -935,7 +935,7 @@ class Client {
     }
   }
 
-  // Decode the DashX payload the backend encodes under `payload.data.dashx`.
+  // Decode the DashX payload carried under `payload.data.dashx`.
   // Falls back to Firebase's `payload.notification` shape (used when the push
   // is delivered as a "notification" message rather than a "data" message).
   // Returns null when neither shape yields a valid payload — caller skips.
@@ -1021,11 +1021,10 @@ class Client {
   async unsubscribe(): Promise<{ success: boolean }> {
     const savedToken = getItem('fcmToken')
     if (!savedToken) {
-      // Legitimate "nothing to unsubscribe" — same semantics as the backend's
-      // "no matching contact" path. Resolve with `success: false` rather than
-      // throwing: a missing local token is not an error,
-      // the device just isn't subscribed in this
-      // session. Errors are reserved for transport / SDK-state failures.
+      // Legitimate "nothing to unsubscribe": resolve with `success: false`
+      // rather than throwing — a missing local token is not an error, the
+      // device just isn't subscribed in this session. Errors are reserved for
+      // transport / SDK-state failures.
       return { success: false }
     }
 
@@ -1653,9 +1652,9 @@ class Client {
     // Build URL with query parameters. `identityToken` is auto-injected from
     // the stored value (set via `setIdentity`) so the SDK uses the same token
     // for both GraphQL (X-Identity-Token header) and the WS handshake — the
-    // backend resolves `request_meta.identity_id` from it, which gates InApp
-    // Chat ownership. The key is camelCase to match the server's WS `Params`
-    // (`#[serde(rename_all = "camelCase")]`), like `publicKey`/`targetEnvironment`.
+    // server identifies the visitor from it, which gates InApp Chat ownership.
+    // The key is camelCase to match the other handshake params
+    // (`publicKey`/`targetEnvironment`).
     const mergedParams: Record<string, string> = { ...(options?.queryParams ?? {}) }
     if (this.#identityToken && !mergedParams.identityToken) {
       mergedParams.identityToken = this.#identityToken
