@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.8.0
+
+### Added
+
+- **In-App Chat client methods.** Three methods on the `DashX` client for the two-way in-app chat feature, each threading the workspace's chat-surface `identityId`:
+  - `startInAppChatConversation(args)` — find-or-create a chat conversation (optionally sending the first message); returns the conversation.
+  - `sendInAppChatMessage(args)` — append a visitor message to a conversation.
+  - `fetchInAppChatMessages(args)` — paginated message history for a conversation.
+
+  All arguments are camelCase (`identityId`, `clientIdempotencyKey`, `conversationId`, `clientMessageId`), and these calls require a visitor identity token to be set (see `setIdentity`). New exported types: `InAppChatMessageData`, `StartInAppChatConversationArgs`, `SendInAppChatMessageArgs`, `FetchInAppChatMessagesArgs`.
+- **`subscribeToChannel(channelName, handler, options?)`** — a public channel-subscribe helper. It sends a `SUBSCRIBE` frame, routes inbound `IN_APP_CHAT_MESSAGE` events to `handler` by conversation id, and automatically re-subscribes on reconnect. Returns `{ ready, unsubscribe }` where `ready` resolves on the first server ack. `unsubscribe()` now also sends an `UNSUBSCRIBE` frame so the server stops forwarding the channel (previously the SDK only stopped dispatching locally). `options.onReconnectAck` (marked `@internal`) fires on each re-ack after a reconnect.
+- **`WebsocketMessage.IN_APP_CHAT_MESSAGE` and `WebsocketMessage.UNSUBSCRIBE`** added to the WebSocket message enum/type.
+- **Identity token on the WebSocket handshake.** When an identity token is set, it is now included in the realtime connect URL (alongside the public key) so the server can identify the visitor for chat ownership. Connections without an identity token build the same URL as before.
+
+### Changed
+
+- **`setIdentity(uid?, token?)` now treats `undefined` as "leave unchanged".** **Behavior change:** a single-arg `setIdentity(uid)` (token omitted) previously *cleared* the identity token; it now leaves the existing token untouched. To clear the token explicitly, pass `setIdentity(uid, null)`; to log out fully, use the zero-arg `setIdentity()` (which still clears both uid and token). Both-argument calls `setIdentity(uid, token)` behave exactly as before. Additionally, when the identity token actually changes while the **client-managed** WebSocket (opened via `connectWebSocket()`) is connected, that socket now reconnects so realtime re-authenticates as the new identity, and tracked chat-channel subscriptions are dropped.
+- **`reset()` now clears identity through `setIdentity()`**, so chat-channel subscriptions are dropped and the client-managed socket reconnects under the fresh anonymous identity. All prior `reset()` behavior is preserved (new anonymous uid, FCM token cleared, foreground-message listener detached, Firebase messaging reference cleared).
+
 ## 0.6.5
 
 ### Added
