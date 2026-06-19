@@ -467,18 +467,28 @@ class Client {
   }
 
   setIdentity(uid?: string | null, token?: string | null): void {
-    // Back-compat: a zero-arg `setIdentity()` clears identity (log out), as it
-    // did before per-argument semantics were added. Routed through the normal
-    // path below (as an explicit null clear) so logout also refreshes the socket
-    // and drops the old token, rather than returning early.
+    // Arg-count-sensitive semantics, back-compat with the pre-token API:
+    //   • 0 args -> log out: clear both uid and token.
+    //   • 1 arg  -> set the uid and CLEAR the token. A caller switching identity
+    //     with one arg must not keep sending the previous visitor's stale token.
+    //   • 2 args -> per-argument: `undefined` leaves that field unchanged, `null`
+    //     explicitly clears it. This is what enables a token-only refresh
+    //     (`setIdentity(undefined, newToken)`) without wiping the account uid.
     // eslint-disable-next-line prefer-rest-params
-    const loggingOut = arguments.length === 0
-    const nextUid = loggingOut ? null : uid
-    const nextToken = loggingOut ? null : token
+    const argCount = arguments.length
+    let nextUid: string | null | undefined
+    let nextToken: string | null | undefined
+    if (argCount === 0) {
+      nextUid = null
+      nextToken = null
+    } else if (argCount === 1) {
+      nextUid = uid
+      nextToken = null
+    } else {
+      nextUid = uid
+      nextToken = token
+    }
 
-    // `undefined` means "leave unchanged"; `null` means "explicitly clear". So
-    // updating only the token (uid omitted) must not wipe an existing account
-    // uid, and vice versa.
     const tokenChanged = nextToken !== undefined && nextToken !== this.#identityToken
     if (nextUid !== undefined) {
       this.accountUid = nextUid
@@ -1560,8 +1570,10 @@ class Client {
   }
 
   // Subscribe to a realtime channel (e.g. `in_app_chat:conversation:{id}`).
-  // `ready` resolves on the first server ack; reconnects re-subscribe and fire
-  // `onReconnectAck` so callers can refetch anything missed during the outage.
+  // `ready` resolves on the first server ack and REJECTS on subscribe timeout or
+  // if `unsubscribe()` is called before the ack — a caller that awaits it should
+  // catch. Reconnects re-subscribe and fire `onReconnectAck` so callers can
+  // refetch anything missed during the outage.
   subscribeToChannel(
     channelName: string,
     handler: (_message: InAppChatMessageData) => void,
@@ -1573,6 +1585,11 @@ class Client {
       resolveReady = resolve
       rejectReady = reject
     })
+    // Internal no-op handler so a caller that never awaits `ready` (e.g.
+    // subscribes then immediately unsubscribes) can't surface an unhandled
+    // rejection. Callers that DO await `ready` still observe the rejection on
+    // their own reference — this only marks the promise as handled.
+    void ready.catch(() => {})
 
     const subscription: ChatChannelSubscription = {
       channelName,
@@ -1608,6 +1625,12 @@ class Client {
       ready,
       unsubscribe: () => {
         clearTimeout(timeout)
+        // If `ready` never settled (unsubscribed mid-handshake, e.g. the widget
+        // unmounted before the first ack), reject it so an awaiting caller
+        // doesn't hang forever. No-op once acked or already timed out.
+        if (!subscription.acked && !subscription.readyTimedOut) {
+          rejectReady(new Error(`Unsubscribed from channel before ack: ${channelName}`))
+        }
         this.#chatChannelSubscriptions.delete(subscription)
         // Tell the server to stop forwarding this channel; without it the
         // subscription lives on the socket until disconnect and events keep

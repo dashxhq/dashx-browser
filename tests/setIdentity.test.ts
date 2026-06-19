@@ -76,6 +76,22 @@ describe('Client.setIdentity', () => {
     expect(client.identityToken).toBe('new-token')
   })
 
+  it('clears a previously set token when switching identity with a single arg', () => {
+    const client = makeClient()
+    client.setIdentity('user-123', 'token-abc')
+    client.setIdentity('user-456')
+    expect(client.accountUid).toBe('user-456')
+    expect(client.identityToken).toBeNull()
+  })
+
+  it('leaves the existing uid untouched when only the token is updated (two-arg)', () => {
+    const client = makeClient()
+    client.setIdentity('user-123', 'token-abc')
+    client.setIdentity(undefined, 'token-xyz')
+    expect(client.accountUid).toBe('user-123')
+    expect(client.identityToken).toBe('token-xyz')
+  })
+
   it('reset() clears identity set via setIdentity back to null', () => {
     const client = makeClient()
     client.setIdentity('user-123', 'token-abc')

@@ -48,7 +48,11 @@ const DashX = {
 
   // Identity
   identify(options: string | Record<string, any>) { return ensureConfigured().identify(options as any) },
-  setIdentity(uid?: string | null, token?: string | null) { return ensureConfigured().setIdentity(uid, token) },
+  // Forward the exact arguments (not a fixed `(uid, token)`) so a zero-arg
+  // `DashX.setIdentity()` reaches `Client.setIdentity()` with no args and is
+  // detected as a logout. Hard-coding two args makes it `(undefined, undefined)`,
+  // which the client reads as "leave both unchanged" — silently breaking logout.
+  setIdentity(...args: Parameters<Client['setIdentity']>) { return ensureConfigured().setIdentity(...args) },
   setAnonymousIdentity(uid: string) { return ensureConfigured().setAnonymousIdentity(uid) },
   reset() { return ensureConfigured().reset() },
 
