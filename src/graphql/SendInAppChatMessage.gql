@@ -12,6 +12,13 @@ mutation SendInAppChatMessage(
       clientMessageId: $clientMessageId
     }
   ) {
-    ...MessageFragment
+    id
+    conversationId
+    renderedContent
+    externalUid
+    senderId
+    aiRole
+    sentAt
+    createdAt
   }
 }

@@ -16,6 +16,7 @@ import {
   AssetDocument,
   FetchCartDocument,
   FetchContactsDocument,
+  FetchInAppChatMessagesDocument,
   FetchInAppMessagesAggregateDocument,
   FetchInAppMessagesDocument,
   FetchProductVariantReleaseDocument,
@@ -30,6 +31,8 @@ import {
   SaveContactsDocument,
   SaveStoredPreferencesDocument,
   SearchRecordsDocument,
+  SendInAppChatMessageDocument,
+  StartInAppChatConversationDocument,
   SubscribeContactDocument,
   TrackEventDocument,
   TrackMessageDocument,
@@ -45,6 +48,7 @@ import type {
   InvokeAiAgentQuery,
   LoadAiAgentInput,
   LoadAiAgentQuery,
+  SendInAppChatMessageMutation,
   SystemContextInput,
   TrackEventInput,
   TrackMessageInput,
@@ -98,18 +102,12 @@ type InAppMessages = FetchInAppMessagesQuery['messages']
 type InAppMessageData = Pick<FetchInAppMessagesQuery['messages'][0], 'id' | 'readAt' | 'renderedContent' | 'sentAt'>
 
 // Two-way chat message. Distinct from `InAppMessageData` (notification-style
-// broadcast). `turnSeq` rides WS events but is absent from fetched history.
-type InAppChatMessageData = {
-  id: string,
-  externalUid: string | null,
-  conversationId: string,
-  senderId: string | null,
-  aiRole: string | null,
-  turnSeq?: number,
-  renderedContent: any,
-  createdAt: string,
-  sentAt: string | null,
-}
+// broadcast). Shape derives from the `SendInAppChatMessage` selection; `turnSeq`
+// rides WS events only (not a GraphQL field), so it's added here as optional.
+type InAppChatMessageData = Pick<
+  SendInAppChatMessageMutation['sendInAppChatMessage'],
+  'id' | 'externalUid' | 'conversationId' | 'senderId' | 'aiRole' | 'renderedContent' | 'sentAt' | 'createdAt'
+> & { turnSeq?: number }
 
 type StartInAppChatConversationArgs = {
   identityId: string,
@@ -250,33 +248,6 @@ type TrackMessageParams = {
   status: TrackMessageInput['status']
   timestamp?: TrackMessageInput['timestamp']
 }
-
-// InApp Chat operations. Inlined via `gql` (rather than codegen'd documents)
-// so the SDK builds without introspecting a live GraphQL schema; the matching
-// `src/graphql/*.gql` files remain the source for typed codegen if wired later.
-const START_IN_APP_CHAT_CONVERSATION = gql`
-  mutation StartInAppChatConversation($identityId: UUID!, $clientIdempotencyKey: String!, $content: JSON, $clientMessageId: String, $data: JSON) {
-    startInAppChatConversation(input: { identityId: $identityId, clientIdempotencyKey: $clientIdempotencyKey, content: $content, clientMessageId: $clientMessageId, data: $data }) {
-      id
-    }
-  }
-`
-
-const SEND_IN_APP_CHAT_MESSAGE = gql`
-  mutation SendInAppChatMessage($conversationId: UUID!, $identityId: UUID!, $content: JSON!, $clientMessageId: String!) {
-    sendInAppChatMessage(input: { conversationId: $conversationId, identityId: $identityId, content: $content, clientMessageId: $clientMessageId }) {
-      id conversationId renderedContent externalUid senderId aiRole sentAt createdAt
-    }
-  }
-`
-
-const FETCH_IN_APP_CHAT_MESSAGES = gql`
-  query FetchInAppChatMessages($conversationId: UUID!, $limit: Int, $page: Int) {
-    fetchInAppChatMessages(input: { conversationId: $conversationId, limit: $limit, page: $page }) {
-      id conversationId renderedContent externalUid senderId aiRole sentAt createdAt
-    }
-  }
-`
 
 const IN_APP_CHAT_CHANNEL_PREFIX = 'in_app_chat:conversation:'
 
@@ -440,7 +411,7 @@ class Client {
   identify(_uid: string): Promise<Response>
   identify(_options: IdentifyParams): Promise<Response>
   identify(options?: string | IdentifyParams): Promise<any> | void {
-    let variables = { input: {} }
+    let variables: { input: Record<string, any> }
 
     if (typeof options === 'string') {
       this.accountUid = options
@@ -474,7 +445,6 @@ class Client {
     //   • 2 args -> per-argument: `undefined` leaves that field unchanged, `null`
     //     explicitly clears it. This is what enables a token-only refresh
     //     (`setIdentity(undefined, newToken)`) without wiping the account uid.
-    // eslint-disable-next-line prefer-rest-params
     const argCount = arguments.length
     let nextUid: string | null | undefined
     let nextToken: string | null | undefined
@@ -1543,26 +1513,20 @@ class Client {
 
   startInAppChatConversation(args: StartInAppChatConversationArgs): Promise<{ id: string }> {
     return this.graphqlClient
-      .mutate<{ startInAppChatConversation: { id: string } }>({
-        mutation: START_IN_APP_CHAT_CONVERSATION,
-        variables: args,
-      })
+      .mutate({ mutation: StartInAppChatConversationDocument, variables: args })
       .then((response) => response.data!.startInAppChatConversation)
   }
 
   sendInAppChatMessage(args: SendInAppChatMessageArgs): Promise<InAppChatMessageData> {
     return this.graphqlClient
-      .mutate<{ sendInAppChatMessage: InAppChatMessageData }>({
-        mutation: SEND_IN_APP_CHAT_MESSAGE,
-        variables: args,
-      })
+      .mutate({ mutation: SendInAppChatMessageDocument, variables: args })
       .then((response) => response.data!.sendInAppChatMessage)
   }
 
   fetchInAppChatMessages(args: FetchInAppChatMessagesArgs): Promise<InAppChatMessageData[]> {
     return this.graphqlClient
-      .query<{ fetchInAppChatMessages: InAppChatMessageData[] }>({
-        query: FETCH_IN_APP_CHAT_MESSAGES,
+      .query({
+        query: FetchInAppChatMessagesDocument,
         variables: args,
         fetchPolicy: 'network-only',
       })

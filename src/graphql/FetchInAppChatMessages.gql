@@ -10,6 +10,13 @@ query FetchInAppChatMessages(
       page: $page
     }
   ) {
-    ...MessageFragment
+    id
+    conversationId
+    renderedContent
+    externalUid
+    senderId
+    aiRole
+    sentAt
+    createdAt
   }
 }

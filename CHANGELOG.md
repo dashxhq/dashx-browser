@@ -5,7 +5,7 @@
 ### Added
 
 - **In-App Chat client methods.** Three methods on the `DashX` client for the two-way in-app chat feature, each threading the workspace's chat-surface `identityId`:
-  - `startInAppChatConversation(args)` — find-or-create a chat conversation (optionally sending the first message); returns the conversation.
+  - `startInAppChatConversation(args)` — find-or-create a chat conversation (optionally sending the first message); returns the conversation id (`{ id }`).
   - `sendInAppChatMessage(args)` — append a visitor message to a conversation.
   - `fetchInAppChatMessages(args)` — paginated message history for a conversation.
 

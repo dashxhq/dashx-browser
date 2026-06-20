@@ -14,6 +14,6 @@ mutation StartInAppChatConversation(
       data: $data
     }
   ) {
-    ...ConversationFragment
+    id
   }
 }
