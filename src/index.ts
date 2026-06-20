@@ -10,6 +10,10 @@ import type {
   InAppMessages,
   WebsocketMessageType,
   InAppMessageData,
+  InAppChatMessageData,
+  StartInAppChatConversationArgs,
+  SendInAppChatMessageArgs,
+  FetchInAppChatMessagesArgs,
   ProductVariantReleaseRule,
   ProductVariantRelease,
   AiAgent,
@@ -44,7 +48,11 @@ const DashX = {
 
   // Identity
   identify(options: string | Record<string, any>) { return ensureConfigured().identify(options as any) },
-  setIdentity(uid?: string | null, token?: string | null) { return ensureConfigured().setIdentity(uid, token) },
+  // Forward the exact arguments (not a fixed `(uid, token)`) so a zero-arg
+  // `DashX.setIdentity()` reaches `Client.setIdentity()` with no args and is
+  // detected as a logout. Hard-coding two args makes it `(undefined, undefined)`,
+  // which the client reads as "leave both unchanged" — silently breaking logout.
+  setIdentity(...args: Parameters<Client['setIdentity']>) { return ensureConfigured().setIdentity(...args) },
   setAnonymousIdentity(uid: string) { return ensureConfigured().setAnonymousIdentity(uid) },
   reset() { return ensureConfigured().reset() },
 
@@ -98,6 +106,12 @@ const DashX = {
   loadAiAgent(options: { publicEmbedKey: string }) { return ensureConfigured().loadAiAgent(options) },
   invokeAiAgent(options: { publicEmbedKey: string; prompt: string; conversationId?: string }) { return ensureConfigured().invokeAiAgent(options) },
 
+  // InApp Chat
+  startInAppChatConversation(args: StartInAppChatConversationArgs) { return ensureConfigured().startInAppChatConversation(args) },
+  sendInAppChatMessage(args: SendInAppChatMessageArgs) { return ensureConfigured().sendInAppChatMessage(args) },
+  fetchInAppChatMessages(args: FetchInAppChatMessagesArgs) { return ensureConfigured().fetchInAppChatMessages(args) },
+  subscribeToChannel(channelName: string, handler: (_message: InAppChatMessageData) => void, options?: { onReconnectAck?: () => void }) { return ensureConfigured().subscribeToChannel(channelName, handler, options) },
+
   // WebSocket
   connectWebSocket() { return ensureConfigured().connectWebSocket() },
   disconnectWebSocket() { return ensureConfigured().disconnectWebSocket() },
@@ -133,10 +147,14 @@ export type {
   ContactKind,
   ContactStatus,
   DashXPushPayload,
+  FetchInAppChatMessagesArgs,
   FirebaseMessaging,
+  InAppChatMessageData,
   InAppMessageData,
   InAppMessages,
   ProductVariantRelease,
+  SendInAppChatMessageArgs,
+  StartInAppChatConversationArgs,
   ProductVariantReleaseRule,
   QueuedMessage,
   SubscribeOptions,

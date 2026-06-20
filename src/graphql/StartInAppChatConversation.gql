@@ -1,0 +1,19 @@
+mutation StartInAppChatConversation(
+  $identityId: UUID!
+  $clientIdempotencyKey: String!
+  $content: JSON
+  $clientMessageId: String
+  $data: JSON
+) {
+  startInAppChatConversation(
+    input: {
+      identityId: $identityId
+      clientIdempotencyKey: $clientIdempotencyKey
+      content: $content
+      clientMessageId: $clientMessageId
+      data: $data
+    }
+  ) {
+    id
+  }
+}

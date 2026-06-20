@@ -16,6 +16,7 @@ import {
   AssetDocument,
   FetchCartDocument,
   FetchContactsDocument,
+  FetchInAppChatMessagesDocument,
   FetchInAppMessagesAggregateDocument,
   FetchInAppMessagesDocument,
   FetchProductVariantReleaseDocument,
@@ -30,6 +31,8 @@ import {
   SaveContactsDocument,
   SaveStoredPreferencesDocument,
   SearchRecordsDocument,
+  SendInAppChatMessageDocument,
+  StartInAppChatConversationDocument,
   SubscribeContactDocument,
   TrackEventDocument,
   TrackMessageDocument,
@@ -45,6 +48,7 @@ import type {
   InvokeAiAgentQuery,
   LoadAiAgentInput,
   LoadAiAgentQuery,
+  SendInAppChatMessageMutation,
   SystemContextInput,
   TrackEventInput,
   TrackMessageInput,
@@ -97,6 +101,45 @@ type InAppMessages = FetchInAppMessagesQuery['messages']
 
 type InAppMessageData = Pick<FetchInAppMessagesQuery['messages'][0], 'id' | 'readAt' | 'renderedContent' | 'sentAt'>
 
+// Two-way chat message. Distinct from `InAppMessageData` (notification-style
+// broadcast). Shape derives from the `SendInAppChatMessage` selection; `turnSeq`
+// rides WS events only (not a GraphQL field), so it's added here as optional.
+type InAppChatMessageData = Pick<
+  SendInAppChatMessageMutation['sendInAppChatMessage'],
+  'id' | 'externalUid' | 'conversationId' | 'senderId' | 'aiRole' | 'renderedContent' | 'sentAt' | 'createdAt'
+> & { turnSeq?: number }
+
+type StartInAppChatConversationArgs = {
+  identityId: string,
+  clientIdempotencyKey: string,
+  content?: Record<string, any>,
+  clientMessageId?: string,
+  data?: Record<string, any>,
+}
+
+type SendInAppChatMessageArgs = {
+  conversationId: string,
+  identityId: string,
+  content: Record<string, any>,
+  clientMessageId: string,
+}
+
+type FetchInAppChatMessagesArgs = {
+  conversationId: string,
+  limit?: number,
+  page?: number,
+}
+
+type ChatChannelSubscription = {
+  channelName: string,
+  conversationId: string | null,
+  handler: (_message: InAppChatMessageData) => void,
+  onReconnectAck?: () => void,
+  acked: boolean,
+  readyTimedOut: boolean,
+  resolveReady: () => void,
+}
+
 type ProductVariantReleaseRule = FetchProductVariantReleaseRuleQuery['productVariantReleaseRule']
 
 type ProductVariantRelease = FetchProductVariantReleaseQuery['productVariantRelease']
@@ -131,8 +174,10 @@ enum WebsocketMessage {
   PONG = 'PONG',
   CONNECTED = 'CONNECTED',
   SUBSCRIBE = 'SUBSCRIBE',
+  UNSUBSCRIBE = 'UNSUBSCRIBE',
   SUBSCRIPTION_SUCCEEDED = 'SUBSCRIPTION_SUCCEEDED',
   IN_APP_MESSAGE = 'IN_APP_MESSAGE',
+  IN_APP_CHAT_MESSAGE = 'IN_APP_CHAT_MESSAGE',
   PRODUCT_VARIANT_RELEASE_RULE_UPDATED = 'PRODUCT_VARIANT_RELEASE_RULE_UPDATED',
 }
 /* eslint-enable no-unused-vars */
@@ -142,8 +187,10 @@ type WebsocketMessageType =
   | { type: WebsocketMessage.PONG }
   | { type: WebsocketMessage.CONNECTED, data: ConnectionData }
   | { type: WebsocketMessage.SUBSCRIBE, data: SubscribeData }
+  | { type: WebsocketMessage.UNSUBSCRIBE, data: SubscribeData }
   | { type: WebsocketMessage.SUBSCRIPTION_SUCCEEDED, data: SubscriptionSucceededData }
   | { type: WebsocketMessage.IN_APP_MESSAGE, data: InAppMessageData }
+  | { type: WebsocketMessage.IN_APP_CHAT_MESSAGE, data: InAppChatMessageData }
   | { type: WebsocketMessage.PRODUCT_VARIANT_RELEASE_RULE_UPDATED, data: ProductVariantReleaseRule }
 
 type FirebaseMessaging = {
@@ -202,6 +249,20 @@ type TrackMessageParams = {
   timestamp?: TrackMessageInput['timestamp']
 }
 
+const IN_APP_CHAT_CHANNEL_PREFIX = 'in_app_chat:conversation:'
+
+// `IN_APP_CHAT_MESSAGE` events carry `conversationId` but not the channel, so
+// the conversation id is parsed from the channel name to route events.
+function parseChatChannelConversationId(channelName: string): string | null {
+  return channelName.startsWith(IN_APP_CHAT_CHANNEL_PREFIX)
+    ? channelName.slice(IN_APP_CHAT_CHANNEL_PREFIX.length)
+    : null
+}
+
+// `ready` rejects (not hangs) if no ack arrives — the WS error frame carries no
+// channel, so timeout is the only reliable per-channel failure signal.
+const SUBSCRIBE_ACK_TIMEOUT_MS = 10000
+
 class Client {
   #accountAnonymousUid!: string
 
@@ -210,6 +271,13 @@ class Client {
   #identityToken: string | null = null
 
   #websocketManager: WebSocketManager | null = null
+
+  // The most recent manager from `createWebSocketConnection` (covers both the
+  // `connectWebSocket` and the React-provider `createWebSocketConnection` paths),
+  // used to send chat channel SUBSCRIBE frames.
+  #activeWebsocketManager: WebSocketManager | null = null
+
+  #chatChannelSubscriptions: Set<ChatChannelSubscription> = new Set()
 
   #messageCallbacks: Set<(_message: InAppMessageData) => void> = new Set()
 
@@ -343,7 +411,7 @@ class Client {
   identify(_uid: string): Promise<Response>
   identify(_options: IdentifyParams): Promise<Response>
   identify(options?: string | IdentifyParams): Promise<any> | void {
-    let variables = { input: {} }
+    let variables: { input: Record<string, any> }
 
     if (typeof options === 'string') {
       this.accountUid = options
@@ -370,8 +438,54 @@ class Client {
   }
 
   setIdentity(uid?: string | null, token?: string | null): void {
-    this.accountUid = uid ?? null
-    this.identityToken = token ?? null
+    // Arg-count-sensitive semantics, back-compat with the pre-token API:
+    //   • 0 args -> log out: clear both uid and token.
+    //   • 1 arg  -> set the uid and CLEAR the token. A caller switching identity
+    //     with one arg must not keep sending the previous visitor's stale token.
+    //   • 2 args -> per-argument: `undefined` leaves that field unchanged, `null`
+    //     explicitly clears it. This is what enables a token-only refresh
+    //     (`setIdentity(undefined, newToken)`) without wiping the account uid.
+    const argCount = arguments.length
+    let nextUid: string | null | undefined
+    let nextToken: string | null | undefined
+    if (argCount === 0) {
+      nextUid = null
+      nextToken = null
+    } else if (argCount === 1) {
+      nextUid = uid
+      nextToken = null
+    } else {
+      nextUid = uid
+      nextToken = token
+    }
+
+    const tokenChanged = nextToken !== undefined && nextToken !== this.#identityToken
+    if (nextUid !== undefined) {
+      this.accountUid = nextUid
+    }
+    if (nextToken !== undefined) {
+      this.identityToken = nextToken
+    }
+
+    // A cleared token (logout) must drop chat subscriptions so they aren't
+    // re-sent on reconnect and keep delivering the previous visitor's events. A
+    // token refresh for the same visitor keeps them (re-subscribed on reconnect).
+    if (tokenChanged && nextToken === null) {
+      this.#chatChannelSubscriptions.clear()
+    }
+
+    // Reconnect the client-managed socket (`connectWebSocket`) so the server
+    // re-resolves the visitor — or drops them, on logout — from the new token;
+    // InApp Chat ownership keys off it. SCOPE: this covers only
+    // `#websocketManager`. Consumers who own their socket via
+    // `createWebSocketConnection` (e.g. @dashx/react's provider) must reconnect
+    // on identity change themselves — the client can't safely recreate a socket
+    // whose handlers it doesn't own.
+    if (tokenChanged && this.#websocketManager?.isConnected) {
+      this.logger.log('Identity token changed while WS is open — reconnecting')
+      this.disconnectWebSocket()
+      this.connectWebSocket()
+    }
   }
 
   setAnonymousIdentity(uid: string): void {
@@ -380,8 +494,11 @@ class Client {
 
   reset(): void {
     this.accountAnonymousUid = uuid()
-    this.accountUid = null
-    this.identityToken = null
+    // Clear identity via `setIdentity()` so chat subscriptions are dropped and
+    // the client-managed socket reconnects under the new anonymous identity. A
+    // direct `accountUid`/`identityToken` reset would leave the socket
+    // authenticated and still receiving the previous visitor's chat events.
+    this.setIdentity()
     this.#foregroundMessageUnsubscribe?.()
     this.#foregroundMessageUnsubscribe = null
     this.#firebaseMessaging = null
@@ -800,8 +917,8 @@ class Client {
     }
   }
 
-  // Build the `metadata` JSON the backend stores against the Contact at
-  // subscribe time.
+  // Build the `metadata` JSON sent at subscribe time and recorded against
+  // the Contact.
   // `library.name` is the package's npm name (`@dashx/browser`), matching
   // what `SystemContext.library.name` already sends on track/identify so
   // the browser SDK is internally consistent.
@@ -820,7 +937,7 @@ class Client {
     }
   }
 
-  // Decode the DashX payload the backend encodes under `payload.data.dashx`.
+  // Decode the DashX payload carried under `payload.data.dashx`.
   // Falls back to Firebase's `payload.notification` shape (used when the push
   // is delivered as a "notification" message rather than a "data" message).
   // Returns null when neither shape yields a valid payload — caller skips.
@@ -906,11 +1023,10 @@ class Client {
   async unsubscribe(): Promise<{ success: boolean }> {
     const savedToken = getItem('fcmToken')
     if (!savedToken) {
-      // Legitimate "nothing to unsubscribe" — same semantics as the backend's
-      // "no matching contact" path. Resolve with `success: false` rather than
-      // throwing: a missing local token is not an error,
-      // the device just isn't subscribed in this
-      // session. Errors are reserved for transport / SDK-state failures.
+      // Legitimate "nothing to unsubscribe": resolve with `success: false`
+      // rather than throwing — a missing local token is not an error, the
+      // device just isn't subscribed in this session. Errors are reserved for
+      // transport / SDK-state failures.
       return { success: false }
     }
 
@@ -1393,7 +1509,154 @@ class Client {
     })
   }
 
-  // Flexible WebSocket connection method for different frameworks
+  // ── InApp Chat ──────────────────────────────────────────────────────────
+
+  startInAppChatConversation(args: StartInAppChatConversationArgs): Promise<{ id: string }> {
+    return this.graphqlClient
+      .mutate({ mutation: StartInAppChatConversationDocument, variables: args })
+      .then((response) => response.data!.startInAppChatConversation)
+  }
+
+  sendInAppChatMessage(args: SendInAppChatMessageArgs): Promise<InAppChatMessageData> {
+    return this.graphqlClient
+      .mutate({ mutation: SendInAppChatMessageDocument, variables: args })
+      .then((response) => response.data!.sendInAppChatMessage)
+  }
+
+  fetchInAppChatMessages(args: FetchInAppChatMessagesArgs): Promise<InAppChatMessageData[]> {
+    return this.graphqlClient
+      .query({
+        query: FetchInAppChatMessagesDocument,
+        variables: args,
+        fetchPolicy: 'network-only',
+      })
+      .then((response) => response.data?.fetchInAppChatMessages ?? [])
+  }
+
+  // Subscribe to a realtime channel (e.g. `in_app_chat:conversation:{id}`).
+  // `ready` resolves on the first server ack and REJECTS on subscribe timeout or
+  // if `unsubscribe()` is called before the ack — a caller that awaits it should
+  // catch. Reconnects re-subscribe and fire `onReconnectAck` so callers can
+  // refetch anything missed during the outage.
+  subscribeToChannel(
+    channelName: string,
+    handler: (_message: InAppChatMessageData) => void,
+    options?: { onReconnectAck?: () => void },
+  ): { ready: Promise<void>, unsubscribe: () => void } {
+    let resolveReady!: () => void
+    let rejectReady!: (_error: Error) => void
+    const ready = new Promise<void>((resolve, reject) => {
+      resolveReady = resolve
+      rejectReady = reject
+    })
+    // Internal no-op handler so a caller that never awaits `ready` (e.g.
+    // subscribes then immediately unsubscribes) can't surface an unhandled
+    // rejection. Callers that DO await `ready` still observe the rejection on
+    // their own reference — this only marks the promise as handled.
+    void ready.catch(() => {})
+
+    const subscription: ChatChannelSubscription = {
+      channelName,
+      conversationId: parseChatChannelConversationId(channelName),
+      handler,
+      onReconnectAck: options?.onReconnectAck,
+      acked: false,
+      readyTimedOut: false,
+      resolveReady,
+    }
+    this.#chatChannelSubscriptions.add(subscription)
+
+    const timeout = setTimeout(() => {
+      if (!subscription.acked) {
+        subscription.readyTimedOut = true
+        rejectReady(new Error(`Timed out subscribing to channel: ${channelName}`))
+      }
+    }, SUBSCRIBE_ACK_TIMEOUT_MS)
+    subscription.resolveReady = () => {
+      clearTimeout(timeout)
+      resolveReady()
+    }
+
+    // Send now if connected; otherwise the next `onOpen` re-subscribe sends it.
+    if (this.#activeWebsocketManager?.isConnected) {
+      this.#activeWebsocketManager.send({
+        type: WebsocketMessage.SUBSCRIBE,
+        data: { channelName },
+      })
+    }
+
+    return {
+      ready,
+      unsubscribe: () => {
+        clearTimeout(timeout)
+        // If `ready` never settled (unsubscribed mid-handshake, e.g. the widget
+        // unmounted before the first ack), reject it so an awaiting caller
+        // doesn't hang forever. No-op once acked or already timed out.
+        if (!subscription.acked && !subscription.readyTimedOut) {
+          rejectReady(new Error(`Unsubscribed from channel before ack: ${channelName}`))
+        }
+        this.#chatChannelSubscriptions.delete(subscription)
+        // Tell the server to stop forwarding this channel; without it the
+        // subscription lives on the socket until disconnect and events keep
+        // arriving at the page-level `onMessage`.
+        if (this.#activeWebsocketManager?.isConnected) {
+          this.#activeWebsocketManager.send({
+            type: WebsocketMessage.UNSUBSCRIBE,
+            data: { channelName },
+          })
+        }
+      },
+    }
+  }
+
+  private resubscribeChatChannels(manager: WebSocketManager): void {
+    this.#chatChannelSubscriptions.forEach((subscription) => {
+      manager.send({
+        type: WebsocketMessage.SUBSCRIBE,
+        data: { channelName: subscription.channelName },
+      })
+    })
+  }
+
+  private handleChatChannelSubscriptionSucceeded(channel: string): void {
+    this.#chatChannelSubscriptions.forEach((subscription) => {
+      if (subscription.channelName !== channel) {
+        return
+      }
+      if (subscription.acked) {
+        subscription.onReconnectAck?.()
+      } else {
+        subscription.acked = true
+        if (subscription.readyTimedOut) {
+          // `ready` already rejected on timeout; treat this first real ack as a
+          // recovery so the caller can load anything it deferred.
+          subscription.onReconnectAck?.()
+        } else {
+          subscription.resolveReady()
+        }
+      }
+    })
+  }
+
+  private notifyChatChannelSubscribers(message: InAppChatMessageData): void {
+    this.#chatChannelSubscriptions.forEach((subscription) => {
+      // Route by conversation id (the event carries no channel name), so two
+      // open chat widgets on one socket don't receive each other's messages.
+      if (subscription.conversationId && subscription.conversationId !== message.conversationId) {
+        return
+      }
+      try {
+        subscription.handler(message)
+      } catch (error) {
+        this.logger.error('Error in chat channel handler:', error)
+      }
+    })
+  }
+
+  // Flexible WebSocket connection method for different frameworks. The caller
+  // owns the returned manager's lifecycle — including reconnecting it on an
+  // identity-token change (`setIdentity` only auto-reconnects the
+  // `connectWebSocket`-managed socket; see `setIdentity`).
   createWebSocketConnection(options?: {
     onMessage?: (_message: WebsocketMessageType) => void
     onOpen?: () => void
@@ -1404,12 +1667,23 @@ class Client {
     queryParams?: Record<string, string>
     shouldReconnect?: boolean | ((_closeEvent: CloseEvent) => boolean)
   }): WebSocketManager {
-    // Build URL with query parameters
+    // Build URL with query parameters. `identityToken` is auto-injected from
+    // the stored value (set via `setIdentity`) so the SDK uses the same token
+    // for both GraphQL (X-Identity-Token header) and the WS handshake — the
+    // server identifies the visitor from it, which gates InApp Chat ownership.
+    // The key is camelCase to match the other handshake params
+    // (`publicKey`/`targetEnvironment`).
+    const mergedParams: Record<string, string> = { ...(options?.queryParams ?? {}) }
+    if (this.#identityToken && !mergedParams.identityToken) {
+      mergedParams.identityToken = this.#identityToken
+    }
+
     let url = this.realtimeBaseUri
-    if (options?.queryParams) {
+    const paramKeys = Object.keys(mergedParams)
+    if (paramKeys.length > 0) {
       const params = new URLSearchParams()
-      Object.entries(options.queryParams).forEach(([ key, value ]) => {
-        params.append(key, value)
+      paramKeys.forEach((key) => {
+        params.append(key, mergedParams[key])
       })
       url += `?${params.toString()}`
     }
@@ -1419,6 +1693,8 @@ class Client {
       onOpen: () => {
         // Automatically subscribe to in-app messages
         this.subscribeToInAppMessages(wsManager)
+        // Re-send tracked chat channel subscriptions (first connect + every reconnect)
+        this.resubscribeChatChannels(wsManager)
         // Trigger refetch of all watched queries when WebSocket connects
         setTimeout(() => {
           this.refetchWatchedQueries()
@@ -1460,6 +1736,7 @@ class Client {
       }),
     })
 
+    this.#activeWebsocketManager = wsManager
     return wsManager
   }
 
@@ -1495,7 +1772,11 @@ class Client {
         break
 
       case WebsocketMessage.SUBSCRIPTION_SUCCEEDED:
-        this.logger.log('Successfully subscribed to in-app messages')
+        this.handleChatChannelSubscriptionSucceeded(_message.data.channel)
+        break
+
+      case WebsocketMessage.IN_APP_CHAT_MESSAGE:
+        this.notifyChatChannelSubscribers(_message.data)
         break
 
       case WebsocketMessage.IN_APP_MESSAGE:
@@ -1521,4 +1802,4 @@ class Client {
 
 export default Client
 export { WebsocketMessage, isTerminalCloseCode, TERMINAL_CLOSE_CODE_MIN, TERMINAL_CLOSE_CODE_MAX }
-export type { ClientParams, InAppMessages, WebsocketMessageType, InAppMessageData, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiNotification, AiAgentStarterMessage, AiAgentStarterSuggestion, DashXPushPayload, FirebaseMessaging, SubscribeOptions }
+export type { ClientParams, InAppMessages, WebsocketMessageType, InAppMessageData, InAppChatMessageData, StartInAppChatConversationArgs, SendInAppChatMessageArgs, FetchInAppChatMessagesArgs, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiNotification, AiAgentStarterMessage, AiAgentStarterSuggestion, DashXPushPayload, FirebaseMessaging, SubscribeOptions }

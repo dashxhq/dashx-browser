@@ -1,0 +1,22 @@
+query FetchInAppChatMessages(
+  $conversationId: UUID!
+  $limit: Int
+  $page: Int
+) {
+  fetchInAppChatMessages(
+    input: {
+      conversationId: $conversationId
+      limit: $limit
+      page: $page
+    }
+  ) {
+    id
+    conversationId
+    renderedContent
+    externalUid
+    senderId
+    aiRole
+    sentAt
+    createdAt
+  }
+}
