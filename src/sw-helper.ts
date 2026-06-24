@@ -23,6 +23,7 @@ type SWWindowClient = {
   focused?: boolean
   focus: () => Promise<SWWindowClient>
   navigate?: (_url: string) => Promise<SWWindowClient | null>
+  postMessage?: (_message: any) => void
 }
 
 type SWClients = {
@@ -104,6 +105,47 @@ async function focusOrOpen(url: string, clients: SWClients): Promise<void> {
   }
 }
 
+// In-App Chat notifications shown via the SW path (used where the page-context
+// `new Notification` constructor is unavailable, e.g. Android Chrome) can't run
+// their click handler in the page directly. Focus an open same-origin tab and
+// `postMessage` it so the page can reopen the chat launcher; if no tab is open,
+// open the app root as a fallback.
+async function focusAndNotifyInAppChatClick(
+  tag: string | undefined,
+  clients: SWClients,
+): Promise<void> {
+  let windowClients: SWWindowClient[] = []
+  if (clients.matchAll) {
+    try {
+      windowClients = await clients.matchAll({ type: 'window', includeUncontrolled: true })
+    } catch {
+      // matchAll unavailable/rejected — fall through to openWindow.
+    }
+  }
+
+  let focused = false
+  for (const client of windowClients) {
+    try {
+      if (!focused) {
+        await client.focus()
+        focused = true
+      }
+      // Posted to every same-origin client; pages without the matching chat
+      // widget ignore it (the Client only acts on a registered tag handler).
+      client.postMessage?.({ source: 'dashx', type: 'IN_APP_CHAT_NOTIFICATION_CLICK', tag })
+    } catch {
+      // Skip an unusable client and try the next.
+    }
+  }
+
+  if (!focused) {
+    const fallback = getFallbackUrl()
+    if (fallback && clients.openWindow) {
+      try { await clients.openWindow(fallback) } catch { /* ignore */ }
+    }
+  }
+}
+
 function createDashXServiceWorkerHandler(config: DashXServiceWorkerConfig) {
   const baseUri = config.baseUri || DEFAULT_BASE_URI
 
@@ -156,7 +198,14 @@ function createDashXServiceWorkerHandler(config: DashXServiceWorkerConfig) {
   // `event.waitUntil` — consumers don't need to do anything with the return.
   function onNotificationClick(event: SWNotificationEvent, clients: SWClients) {
     event.notification.close()
-    const { dashxNotificationId, url } = event.notification.data || {}
+    const { dashxNotificationId, url, dashxInAppChat, dashxInAppChatTag } = event.notification.data || {}
+
+    // In-App Chat (SW fallback path): focus the app and tell the page to reopen
+    // the chat. These notifications carry no `dashxNotificationId`/`url`.
+    if (dashxInAppChat) {
+      event.waitUntil(focusAndNotifyInAppChatClick(dashxInAppChatTag, clients))
+      return
+    }
 
     if (dashxNotificationId) {
       event.waitUntil(trackMessage(dashxNotificationId, TRACK_MESSAGE_STATUS.CLICKED) || Promise.resolve())

@@ -1,6 +1,6 @@
 import uuid from 'uuid-random'
 import { ApolloCache, ApolloClient, ApolloLink, HttpLink, InMemoryCache, gql } from '@apollo/client/core'
-import { setContext } from '@apollo/client/link/context'
+import { SetContextLink } from '@apollo/client/link/context'
 
 import SearchRecordsInputBuilder, { FetchRecordsOptions, SearchRecordsOptions } from './SearchRecordsInputBuilder'
 import generateContext from './context'
@@ -251,6 +251,10 @@ type TrackMessageParams = {
 
 const IN_APP_CHAT_CHANNEL_PREFIX = 'in_app_chat:conversation:'
 
+// Fallback key for a chat notification's click handler when it carries no tag
+// (i.e. no conversation id). Shared by the producer and the SW-click bridge.
+const IN_APP_CHAT_CLICK_KEY_FALLBACK = 'in_app_chat:default'
+
 // `IN_APP_CHAT_MESSAGE` events carry `conversationId` but not the channel, so
 // the conversation id is parsed from the channel name to route events.
 function parseChatChannelConversationId(channelName: string): string | null {
@@ -288,6 +292,13 @@ class Client {
   #pushNotificationCallbacks: Set<PushNotificationCallback> = new Set()
 
   #serviceWorkerRegistration: ServiceWorkerRegistration | null = null
+
+  // Click handlers for chat notifications shown via the service-worker path,
+  // keyed by notification tag. Invoked when the SW bridges a notificationclick
+  // back to the page (see `#ensureInAppChatClickBridge`).
+  #inAppChatNotificationClickHandlers: Map<string, () => void> = new Map()
+
+  #inAppChatClickBridgeAttached: boolean = false
 
   #showForegroundNotifications: boolean = true
 
@@ -381,7 +392,7 @@ class Client {
   private initGraphqlClient() {
     const httpLink = new HttpLink({ uri: this.baseUri })
 
-    const authLink = setContext((_, { headers }) => ({
+    const authLink = new SetContextLink(({ headers }) => ({
       headers: {
         ...headers,
         'X-Public-Key': this.publicKey,
@@ -870,6 +881,100 @@ class Client {
   getNotificationPermission(): NotificationPermissionState {
     if (typeof Notification === 'undefined') return 'unsupported'
     return Notification.permission as NotificationPermissionState
+  }
+
+  /**
+   * Request browser notification permission. Thin public wrapper over
+   * `Notification.requestPermission()` (the SDK also requests it internally in
+   * `subscribe()`). Returns `'denied'` when the Notification API is unavailable,
+   * so callers can branch without try/catch. Call this from a user gesture (e.g.
+   * when the visitor opens chat) — browsers ignore/penalize on-load prompts.
+   */
+  async requestNotificationPermission(): Promise<NotificationPermission> {
+    if (typeof Notification === 'undefined') return 'denied'
+    if (Notification.permission !== 'default') return Notification.permission
+    try {
+      return await Notification.requestPermission()
+    } catch {
+      return Notification.permission
+    }
+  }
+
+  /**
+   * Show a foreground browser notification for an incoming In-App Chat message.
+   * Foreground-only: the SDK is already running and received the message over
+   * the WebSocket — this surfaces it via the Notifications API when the visitor
+   * isn't looking at the chat. No-ops unless permission is `granted`.
+   *
+   * Prefers a page-context `new Notification` (so a click can focus the tab and
+   * run `onClick`), and falls back to the registered service worker's
+   * `showNotification` when the page constructor is unavailable (e.g. Android
+   * Chrome). Embedders need NOT host a service worker for this to work on
+   * desktop browsers.
+   */
+  showInAppChatNotification(options: {
+    title: string
+    body?: string
+    tag?: string
+    icon?: string
+    onClick?: () => void
+  }): void {
+    if (this.getNotificationPermission() !== 'granted') return
+
+    const { title, body = '', tag, icon, onClick } = options
+
+    if (typeof Notification === 'function') {
+      try {
+        const notification = new Notification(title, { body, tag, icon })
+        notification.onclick = () => {
+          if (typeof window !== 'undefined') {
+            try { window.focus() } catch { /* cross-origin / unavailable */ }
+          }
+          notification.close()
+          onClick?.()
+        }
+        return
+      } catch {
+        // Some browsers (e.g. Android Chrome) forbid the page-context
+        // constructor and require the service worker path below.
+      }
+    }
+
+    if (this.#serviceWorkerRegistration) {
+      // SW path: the page can't receive the click directly, so register the
+      // click handler keyed by tag and bridge it through a SW `postMessage`
+      // (see `#ensureInAppChatClickBridge` + sw-helper `onNotificationClick`).
+      const clickKey = tag || IN_APP_CHAT_CLICK_KEY_FALLBACK
+      if (onClick) {
+        this.#inAppChatNotificationClickHandlers.set(clickKey, onClick)
+        this.#ensureInAppChatClickBridge()
+      }
+      this.#serviceWorkerRegistration
+        .showNotification(title, {
+          body,
+          tag,
+          icon,
+          data: { dashxInAppChat: true, dashxInAppChatTag: clickKey },
+        })
+        .catch((error) => { this.logger.error('Error showing chat notification:', error) })
+    }
+  }
+
+  // Bridge service-worker notification clicks back to the page so a chat
+  // notification shown via the SW path (where `new Notification` is forbidden)
+  // can still reopen the launcher. The SW focuses an open tab and postMessages
+  // it; we invoke the stored click handler for that notification's tag.
+  // Attached once, lazily, the first time a SW-path chat notification is shown.
+  #ensureInAppChatClickBridge(): void {
+    if (this.#inAppChatClickBridgeAttached) return
+    if (typeof navigator === 'undefined' || !navigator.serviceWorker) return
+    this.#inAppChatClickBridgeAttached = true
+    navigator.serviceWorker.addEventListener('message', (event: MessageEvent) => {
+      const data = event.data
+      if (!data || data.source !== 'dashx' || data.type !== 'IN_APP_CHAT_NOTIFICATION_CLICK') return
+      const handler = this.#inAppChatNotificationClickHandlers.get(data.tag || IN_APP_CHAT_CLICK_KEY_FALLBACK)
+      handler?.()
+    })
   }
 
   #validateMessaging(messaging: FirebaseMessaging): void {
@@ -1511,26 +1616,26 @@ class Client {
 
   // ── InApp Chat ──────────────────────────────────────────────────────────
 
-  startInAppChatConversation(args: StartInAppChatConversationArgs): Promise<{ id: string }> {
-    return this.graphqlClient
+  async startInAppChatConversation(args: StartInAppChatConversationArgs): Promise<{ id: string }> {
+    const response = await this.graphqlClient
       .mutate({ mutation: StartInAppChatConversationDocument, variables: args })
-      .then((response) => response.data!.startInAppChatConversation)
+    return response.data!.startInAppChatConversation
   }
 
-  sendInAppChatMessage(args: SendInAppChatMessageArgs): Promise<InAppChatMessageData> {
-    return this.graphqlClient
+  async sendInAppChatMessage(args: SendInAppChatMessageArgs): Promise<InAppChatMessageData> {
+    const response = await this.graphqlClient
       .mutate({ mutation: SendInAppChatMessageDocument, variables: args })
-      .then((response) => response.data!.sendInAppChatMessage)
+    return response.data!.sendInAppChatMessage
   }
 
-  fetchInAppChatMessages(args: FetchInAppChatMessagesArgs): Promise<InAppChatMessageData[]> {
-    return this.graphqlClient
+  async fetchInAppChatMessages(args: FetchInAppChatMessagesArgs): Promise<InAppChatMessageData[]> {
+    const response = await this.graphqlClient
       .query({
         query: FetchInAppChatMessagesDocument,
         variables: args,
         fetchPolicy: 'network-only',
       })
-      .then((response) => response.data?.fetchInAppChatMessages ?? [])
+    return response.data?.fetchInAppChatMessages ?? []
   }
 
   // Subscribe to a realtime channel (e.g. `in_app_chat:conversation:{id}`).
