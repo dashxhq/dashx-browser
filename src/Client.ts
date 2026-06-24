@@ -1,6 +1,6 @@
 import uuid from 'uuid-random'
 import { ApolloCache, ApolloClient, ApolloLink, HttpLink, InMemoryCache, gql } from '@apollo/client/core'
-import { setContext } from '@apollo/client/link/context'
+import { SetContextLink } from '@apollo/client/link/context'
 
 import SearchRecordsInputBuilder, { FetchRecordsOptions, SearchRecordsOptions } from './SearchRecordsInputBuilder'
 import generateContext from './context'
@@ -392,7 +392,7 @@ class Client {
   private initGraphqlClient() {
     const httpLink = new HttpLink({ uri: this.baseUri })
 
-    const authLink = setContext((_, { headers }) => ({
+    const authLink = new SetContextLink(({ headers }) => ({
       headers: {
         ...headers,
         'X-Public-Key': this.publicKey,
