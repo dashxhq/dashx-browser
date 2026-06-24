@@ -1616,26 +1616,26 @@ class Client {
 
   // ── InApp Chat ──────────────────────────────────────────────────────────
 
-  startInAppChatConversation(args: StartInAppChatConversationArgs): Promise<{ id: string }> {
-    return this.graphqlClient
+  async startInAppChatConversation(args: StartInAppChatConversationArgs): Promise<{ id: string }> {
+    const response = await this.graphqlClient
       .mutate({ mutation: StartInAppChatConversationDocument, variables: args })
-      .then((response) => response.data!.startInAppChatConversation)
+    return response.data!.startInAppChatConversation
   }
 
-  sendInAppChatMessage(args: SendInAppChatMessageArgs): Promise<InAppChatMessageData> {
-    return this.graphqlClient
+  async sendInAppChatMessage(args: SendInAppChatMessageArgs): Promise<InAppChatMessageData> {
+    const response = await this.graphqlClient
       .mutate({ mutation: SendInAppChatMessageDocument, variables: args })
-      .then((response) => response.data!.sendInAppChatMessage)
+    return response.data!.sendInAppChatMessage
   }
 
-  fetchInAppChatMessages(args: FetchInAppChatMessagesArgs): Promise<InAppChatMessageData[]> {
-    return this.graphqlClient
+  async fetchInAppChatMessages(args: FetchInAppChatMessagesArgs): Promise<InAppChatMessageData[]> {
+    const response = await this.graphqlClient
       .query({
         query: FetchInAppChatMessagesDocument,
         variables: args,
         fetchPolicy: 'network-only',
       })
-      .then((response) => response.data?.fetchInAppChatMessages ?? [])
+    return response.data?.fetchInAppChatMessages ?? []
   }
 
   // Subscribe to a realtime channel (e.g. `in_app_chat:conversation:{id}`).
