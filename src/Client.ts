@@ -101,6 +101,10 @@ type InAppMessages = FetchInAppMessagesQuery['messages']
 
 type InAppMessageData = Pick<FetchInAppMessagesQuery['messages'][0], 'id' | 'readAt' | 'renderedContent' | 'sentAt'>
 
+// Read/unread state change for an in-app notification, broadcast to the account's other
+// tabs so they converge without a refetch of their own. Carries only the id + readAt.
+type InAppMessageReadData = Pick<FetchInAppMessagesQuery['messages'][0], 'id' | 'readAt'>
+
 // Two-way chat message. Distinct from `InAppMessageData` (notification-style
 // broadcast). Shape derives from the `SendInAppChatMessage` selection; `turnSeq`
 // rides WS events only (not a GraphQL field), so it's added here as optional.
@@ -177,6 +181,7 @@ enum WebsocketMessage {
   UNSUBSCRIBE = 'UNSUBSCRIBE',
   SUBSCRIPTION_SUCCEEDED = 'SUBSCRIPTION_SUCCEEDED',
   IN_APP_MESSAGE = 'IN_APP_MESSAGE',
+  IN_APP_MESSAGE_READ = 'IN_APP_MESSAGE_READ',
   IN_APP_CHAT_MESSAGE = 'IN_APP_CHAT_MESSAGE',
   PRODUCT_VARIANT_RELEASE_RULE_UPDATED = 'PRODUCT_VARIANT_RELEASE_RULE_UPDATED',
 }
@@ -190,6 +195,7 @@ type WebsocketMessageType =
   | { type: WebsocketMessage.UNSUBSCRIBE, data: SubscribeData }
   | { type: WebsocketMessage.SUBSCRIPTION_SUCCEEDED, data: SubscriptionSucceededData }
   | { type: WebsocketMessage.IN_APP_MESSAGE, data: InAppMessageData }
+  | { type: WebsocketMessage.IN_APP_MESSAGE_READ, data: InAppMessageReadData }
   | { type: WebsocketMessage.IN_APP_CHAT_MESSAGE, data: InAppChatMessageData }
   | { type: WebsocketMessage.PRODUCT_VARIANT_RELEASE_RULE_UPDATED, data: ProductVariantReleaseRule }
 
@@ -1893,6 +1899,13 @@ class Client {
         }
         // Notify all registered callbacks
         this.notifyMessageCallbacks(_message.data)
+        break
+
+      case WebsocketMessage.IN_APP_MESSAGE_READ:
+        // A read/unread change (from another tab or this account elsewhere). Refresh the
+        // watched in-app queries so the message list's read state and the unread badge
+        // converge across all of the account's open tabs.
+        this.refetchWatchedQueries()
         break
 
       default:
