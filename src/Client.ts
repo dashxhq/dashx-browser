@@ -61,6 +61,16 @@ const UPLOAD_RETRY_TIMEOUT = 3000
 
 // Page size for paginated in-app notification fetches (initial page + each loadMore).
 export const IN_APP_MESSAGES_PAGE_SIZE = 20
+
+// Hand-written (not in src/generated) because codegen introspects a deployed API; fold it
+// into the generated documents on the next codegen run against a backend that has it.
+const TrackAllMessagesDocument = gql`
+  mutation TrackAllMessages($input: TrackAllMessagesInput!) {
+    trackAllMessages(input: $input) {
+      success
+    }
+  }
+`
 const UNIDENTIFIED_USER_ERROR = 'This operation can be performed only by an identified user. Ensure `dashx.identify` is run before calling this method.'
 
 // Terminal close-code band. When the server closes the socket with a code in
@@ -187,6 +197,7 @@ enum WebsocketMessage {
   SUBSCRIPTION_SUCCEEDED = 'SUBSCRIPTION_SUCCEEDED',
   IN_APP_MESSAGE = 'IN_APP_MESSAGE',
   IN_APP_MESSAGE_READ = 'IN_APP_MESSAGE_READ',
+  IN_APP_MESSAGES_READ_ALL = 'IN_APP_MESSAGES_READ_ALL',
   IN_APP_CHAT_MESSAGE = 'IN_APP_CHAT_MESSAGE',
   PRODUCT_VARIANT_RELEASE_RULE_UPDATED = 'PRODUCT_VARIANT_RELEASE_RULE_UPDATED',
 }
@@ -201,6 +212,7 @@ type WebsocketMessageType =
   | { type: WebsocketMessage.SUBSCRIPTION_SUCCEEDED, data: SubscriptionSucceededData }
   | { type: WebsocketMessage.IN_APP_MESSAGE, data: InAppMessageData }
   | { type: WebsocketMessage.IN_APP_MESSAGE_READ, data: InAppMessageReadData }
+  | { type: WebsocketMessage.IN_APP_MESSAGES_READ_ALL, data: { readAt: string } }
   | { type: WebsocketMessage.IN_APP_CHAT_MESSAGE, data: InAppChatMessageData }
   | { type: WebsocketMessage.PRODUCT_VARIANT_RELEASE_RULE_UPDATED, data: ProductVariantReleaseRule }
 
@@ -648,6 +660,87 @@ class Client {
     return this.graphqlClient.mutate({
       mutation: TrackMessageDocument,
       variables,
+      update,
+    })
+  }
+
+  // Marks every unread in-app message for the identified account as read, up to
+  // `timestamp` - one mutation instead of one trackMessage per message, covering unread
+  // messages beyond the pages the client has loaded. The server applies the write
+  // asynchronously, so the cache is swept optimistically here (loaded messages' readAt +
+  // the unread badge) rather than refetched.
+  trackAllMessages({ timestamp }: { timestamp?: string } = {}) {
+    if (!this.#accountUid) {
+      throw new Error(UNIDENTIFIED_USER_ERROR)
+    }
+
+    const accountUid = this.#accountUid
+    const readAt = timestamp || new Date().toISOString()
+
+    const update = (cache: ApolloCache) => {
+      const existingMessages = cache.readQuery({
+        query: FetchInAppMessagesDocument,
+        variables: { input: { accountUid } },
+      })
+
+      // Mirror the server's watermark: only sweep messages sent up to `readAt`. A message
+      // that arrived while the mutation was in flight (or after an explicit past
+      // timestamp) stays unread here, exactly as it will on the server.
+      const watermark = new Date(readAt).getTime()
+      let remainingUnread = 0
+      existingMessages?.messages?.forEach((message) => {
+        if (message.readAt) return
+
+        if (!message.sentAt || new Date(message.sentAt).getTime() > watermark) {
+          remainingUnread += 1
+          return
+        }
+
+        cache.writeFragment({
+          data: {
+            id: message.id,
+            readAt,
+            __typename: 'Message',
+          },
+          fragment: gql`
+            fragment MarkAllMessagesRead on Message {
+              id
+              readAt
+            }
+          `,
+        })
+      })
+
+      // Optimistically settle the badge only for the default "now" watermark, where
+      // anything unread beyond the loaded pages necessarily predates it (new arrivals are
+      // prepended into the cache), so the loaded post-watermark messages are the only
+      // unread left. With an explicit (possibly past) timestamp that inference fails -
+      // unloaded unread messages may be newer than the watermark - so leave the aggregate
+      // alone; the server's read-all frame refetches it once the bulk write lands.
+      if (!timestamp) {
+        cache.writeQuery({
+          query: FetchInAppMessagesAggregateDocument,
+          data: {
+            messagesAggregate: {
+              __typename: 'FetchInAppMessagesAggregateResponse',
+              count: remainingUnread,
+            },
+          },
+          variables: {
+            input: {
+              accountUid,
+              filter: {
+                readAt: 'null',
+              },
+            },
+          },
+        })
+      }
+    }
+
+    return this.graphqlClient.mutate({
+      mutation: TrackAllMessagesDocument,
+      variables: { input: { accountUid, timestamp: readAt } },
       update,
     })
   }
@@ -2004,9 +2097,11 @@ class Client {
         break
 
       case WebsocketMessage.IN_APP_MESSAGE_READ:
-        // A read/unread change (from another tab or this account elsewhere). Refresh the
-        // watched in-app queries so the message list's read state and the unread badge
-        // converge across all of the account's open tabs.
+      case WebsocketMessage.IN_APP_MESSAGES_READ_ALL:
+        // A read/unread change (from another tab or this account elsewhere) - single
+        // message or bulk mark-all. Refresh the watched in-app queries so the message
+        // list's read state and the unread badge converge across all of the account's
+        // open tabs.
         this.refetchWatchedQueries()
         break
 

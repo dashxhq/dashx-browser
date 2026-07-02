@@ -60,6 +60,7 @@ const DashX = {
   // Analytics
   track(event: string, data?: any) { return ensureConfigured().track(event, data) },
   trackMessage(params: Parameters<Client['trackMessage']>[0]) { return ensureConfigured().trackMessage(params) },
+  trackAllMessages(params?: Parameters<Client['trackAllMessages']>[0]) { return ensureConfigured().trackAllMessages(params) },
 
   // In-App Messages
   fetchInAppMessages() { return ensureConfigured().fetchInAppMessages() },
