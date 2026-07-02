@@ -1,6 +1,7 @@
 import Client, {
   WebsocketMessage,
   isTerminalCloseCode,
+  IN_APP_MESSAGES_PAGE_SIZE,
   TERMINAL_CLOSE_CODE_MIN,
   TERMINAL_CLOSE_CODE_MAX,
 } from './Client'
@@ -62,6 +63,7 @@ const DashX = {
 
   // In-App Messages
   fetchInAppMessages() { return ensureConfigured().fetchInAppMessages() },
+  fetchMoreInAppMessages() { return ensureConfigured().fetchMoreInAppMessages() },
   addInAppMessageToCache(message: InAppMessageData) { return ensureConfigured().addInAppMessageToCache(message) },
   watchFetchInAppMessages(callback: (_data: InAppMessages) => void) { return ensureConfigured().watchFetchInAppMessages(callback) },
   watchFetchInAppMessagesAggregate(callback: (_data: number) => void) { return ensureConfigured().watchFetchInAppMessagesAggregate(callback) },
@@ -136,6 +138,7 @@ export {
   WebsocketMessage,
   WebSocketManager,
   isTerminalCloseCode,
+  IN_APP_MESSAGES_PAGE_SIZE,
   TERMINAL_CLOSE_CODE_MIN,
   TERMINAL_CLOSE_CODE_MAX,
   ReadyState,

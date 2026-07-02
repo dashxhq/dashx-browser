@@ -1,15 +1,12 @@
 import uuid from 'uuid-random'
 import { ApolloCache, ApolloClient, ApolloLink, HttpLink, InMemoryCache, gql } from '@apollo/client/core'
 import { SetContextLink } from '@apollo/client/link/context'
+import type { ObservableQuery } from '@apollo/client/core'
 
-import SearchRecordsInputBuilder, { FetchRecordsOptions, SearchRecordsOptions } from './SearchRecordsInputBuilder'
 import generateContext from './context'
-import WebSocketManager from './WebSocketManager'
-import { createLogger } from './logging'
-import { getItem, setItem } from './storage'
 import packageInfo from '../package.json'
-import { DEFAULT_BASE_URI, TRACK_MESSAGE_STATUS } from './constants'
-import type { DashXPushPayload } from './push-types'
+import SearchRecordsInputBuilder, { FetchRecordsOptions, SearchRecordsOptions } from './SearchRecordsInputBuilder'
+import WebSocketManager from './WebSocketManager'
 import {
   AddItemToCartDocument,
   ApplyCouponToCartDocument,
@@ -42,6 +39,7 @@ import {
 import type {
   ContactStubInput,
   FetchInAppMessagesQuery,
+  FetchInAppMessagesQueryVariables,
   FetchProductVariantReleaseQuery,
   FetchProductVariantReleaseRuleQuery,
   InvokeAiAgentInput,
@@ -53,9 +51,16 @@ import type {
   TrackEventInput,
   TrackMessageInput,
 } from './generated'
+import { createLogger } from './logging'
+import { DEFAULT_BASE_URI, TRACK_MESSAGE_STATUS } from './constants'
+import { getItem, setItem } from './storage'
+import type { DashXPushPayload } from './push-types'
 
 const UPLOAD_RETRY_LIMIT = 5
 const UPLOAD_RETRY_TIMEOUT = 3000
+
+// Page size for paginated in-app notification fetches (initial page + each loadMore).
+export const IN_APP_MESSAGES_PAGE_SIZE = 20
 const UNIDENTIFIED_USER_ERROR = 'This operation can be performed only by an identified user. Ensure `dashx.identify` is run before calling this method.'
 
 // Terminal close-code band. When the server closes the socket with a code in
@@ -312,6 +317,23 @@ class Client {
 
   #watchedQueries: Set<{ refetch: () => void; name: string }> = new Set()
 
+  // Highest in-app notification page currently loaded into the cache; `fetchMoreInAppMessages`
+  // fetches the next one. Reset to 1 whenever the list is (re)fetched from the top.
+  #inAppMessagesPage = 1
+
+  // The single shared watched in-app notifications query, so `fetchMoreInAppMessages` can
+  // page it with the same query rather than firing a separate one. Shared across all
+  // watchers (they observe the same canonical query) and torn down only when the last one
+  // unsubscribes - see `#inAppMessagesWatcherCount`.
+  #inAppMessagesObservable: ObservableQuery<
+    FetchInAppMessagesQuery,
+    FetchInAppMessagesQueryVariables
+  > | null = null
+
+  // Live `watchFetchInAppMessages` subscriber count; the shared observable + page cursor are
+  // only reset/created on the first watcher and disposed on the last.
+  #inAppMessagesWatcherCount = 0
+
   graphqlClient!: ApolloClient
 
   baseUri: string
@@ -409,7 +431,30 @@ class Client {
 
     this.graphqlClient = new ApolloClient({
       link: ApolloLink.from([ authLink, httpLink ]),
-      cache: new InMemoryCache(),
+      cache: new InMemoryCache({
+        typePolicies: {
+          Query: {
+            fields: {
+              // Paginated in-app notifications: keep one cached list per accountUid
+              // (ignoring page/limit) and append successive pages, so the watched
+              // query grows as `fetchMoreInAppMessages` pulls more instead of each
+              // page replacing the last. Page 1 (or a direct write) replaces.
+              fetchInAppMessages: {
+                keyArgs: [ 'input', [ 'accountUid' ] ],
+                merge(existing: any[] = [], incoming: any[], { args }: any) {
+                  if ((args?.input?.page ?? 1) <= 1) {
+                    return incoming
+                  }
+                  const seen = new Set(existing.map((ref: any) => ref.__ref ?? ref.id))
+                  return existing.concat(
+                    incoming.filter((ref: any) => !seen.has(ref.__ref ?? ref.id)),
+                  )
+                },
+              },
+            },
+          },
+        },
+      }),
       devtools: { enabled: true },
       defaultOptions: {
         watchQuery: {
@@ -607,36 +652,73 @@ class Client {
     })
   }
 
-  async fetchInAppMessages() {
+  async fetchInAppMessages(): Promise<{ hasMore: boolean }> {
     if (!this.#accountUid) {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
 
+    this.#inAppMessagesPage = 1
+
     const fetchInAppMessagesVariables = {
       input: {
         accountUid: this.#accountUid,
+        limit: IN_APP_MESSAGES_PAGE_SIZE,
+        page: 1,
       },
     }
 
     const fetchInAppMessagesAggregateVariables = {
       input: {
-        ...fetchInAppMessagesVariables.input,
+        accountUid: this.#accountUid,
         filter: {
           readAt: 'null',
         },
       },
     }
 
-    await Promise.all([
+    const [ messagesResult ] = await Promise.all([
       this.graphqlClient.query({
         query: FetchInAppMessagesDocument,
         variables: fetchInAppMessagesVariables,
+        fetchPolicy: 'network-only',
       }),
       this.graphqlClient.query({
         query: FetchInAppMessagesAggregateDocument,
         variables: fetchInAppMessagesAggregateVariables,
       }),
     ])
+
+    return { hasMore: (messagesResult.data?.messages ?? []).length === IN_APP_MESSAGES_PAGE_SIZE }
+  }
+
+  // Pages the watched in-app notifications query forward: `fetchMore` re-runs the same
+  // query with the next page and the `fetchInAppMessages` merge policy appends it, so the
+  // watcher re-emits the grown list. Returns whether a further page likely exists (the
+  // page came back full). No-ops until `watchFetchInAppMessages` has set up the query.
+  async fetchMoreInAppMessages(): Promise<{ hasMore: boolean }> {
+    if (!this.#accountUid) {
+      throw new Error(UNIDENTIFIED_USER_ERROR)
+    }
+
+    if (!this.#inAppMessagesObservable) {
+      return { hasMore: false }
+    }
+
+    const nextPage = this.#inAppMessagesPage + 1
+
+    const result = await this.#inAppMessagesObservable.fetchMore({
+      variables: {
+        input: {
+          accountUid: this.#accountUid,
+          limit: IN_APP_MESSAGES_PAGE_SIZE,
+          page: nextPage,
+        },
+      },
+    })
+
+    this.#inAppMessagesPage = nextPage
+
+    return { hasMore: (result.data?.messages ?? []).length === IN_APP_MESSAGES_PAGE_SIZE }
   }
 
   addInAppMessageToCache(message: InAppMessageData): void {
@@ -697,24 +779,37 @@ class Client {
       throw new Error(UNIDENTIFIED_USER_ERROR)
     }
 
-    const variables = {
-      input: {
-        accountUid: this.#accountUid,
-      },
+    // First watcher creates the single shared observable (all watchers observe the same
+    // canonical query); later watchers just subscribe to it. This keeps one page cursor and
+    // one handle for `fetchMoreInAppMessages`, so an earlier watcher unmounting can't strand
+    // a still-active one.
+    if (!this.#inAppMessagesObservable) {
+      this.#inAppMessagesPage = 1
+
+      this.#inAppMessagesObservable = this.graphqlClient.watchQuery({
+        query: FetchInAppMessagesDocument,
+        variables: {
+          input: {
+            accountUid: this.#accountUid,
+            limit: IN_APP_MESSAGES_PAGE_SIZE,
+            page: 1,
+          },
+        },
+      })
+
+      // Register for automatic refetch on WebSocket reconnection. Refetch reloads page 1
+      // (the merge policy replaces on page <= 1), so reset the cursor to match - any pages
+      // loaded via fetchMoreInAppMessages are dropped and re-pulled on demand.
+      this.registerWatchedQuery(() => {
+        this.#inAppMessagesPage = 1
+        this.#inAppMessagesObservable?.refetch()
+      }, 'watchFetchInAppMessages')
     }
 
-    const observableQuery = this.graphqlClient.watchQuery({
-      query: FetchInAppMessagesDocument,
-      variables,
-    })
+    this.#inAppMessagesWatcherCount += 1
 
-    // Register this query for automatic refetch on WebSocket reconnection
-    this.registerWatchedQuery(() => {
-      observableQuery.refetch()
-    }, 'watchFetchInAppMessages')
-
-    const subscription = observableQuery.subscribe({
-      next(_response: any) {
+    const subscription = this.#inAppMessagesObservable.subscribe({
+      next: (_response: any) => {
         callback(_response.data?.messages ?? [])
       },
       error: (_err: any) => {
@@ -725,7 +820,14 @@ class Client {
 
     return () => {
       subscription.unsubscribe()
-      this.unregisterWatchedQuery('watchFetchInAppMessages')
+      this.#inAppMessagesWatcherCount -= 1
+
+      // Only tear down the shared observable once the last watcher is gone.
+      if (this.#inAppMessagesWatcherCount <= 0) {
+        this.#inAppMessagesWatcherCount = 0
+        this.#inAppMessagesObservable = null
+        this.unregisterWatchedQuery('watchFetchInAppMessages')
+      }
     }
   }
 
