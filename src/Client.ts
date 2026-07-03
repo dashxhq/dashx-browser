@@ -834,7 +834,9 @@ class Client {
       query: FetchInAppMessagesDocument,
       data: {
         messages: [
-          { ...message, __typename: 'Message' },
+          // A realtime frame can race the server's sent_at stamp and carry null; default
+          // to now (this runs at delivery) so consumers never render a null date.
+          { ...message, sentAt: message.sentAt ?? new Date().toISOString(), __typename: 'Message' },
           ...existingMessages?.messages || [],
         ],
       },
