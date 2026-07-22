@@ -1,0 +1,25 @@
+query FetchInAppChatConversations(
+  $identityId: UUID!
+  $limit: Int
+  $page: Int
+  $statuses: [String!]
+  $category: String
+  $contextKind: String
+  $contextSubtype: String
+  $contextId: String
+) {
+  fetchInAppChatConversations(
+    input: {
+      identityId: $identityId
+      limit: $limit
+      page: $page
+      statuses: $statuses
+      category: $category
+      contextKind: $contextKind
+      contextSubtype: $contextSubtype
+      contextId: $contextId
+    }
+  ) {
+    ...ChatConversationSummaryFragment
+  }
+}
