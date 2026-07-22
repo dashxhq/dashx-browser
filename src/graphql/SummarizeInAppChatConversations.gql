@@ -1,0 +1,21 @@
+query SummarizeInAppChatConversations(
+  $identityId: UUID!
+  $statuses: [String!]
+  $category: String
+  $contextKind: String
+  $contextSubtype: String
+  $contextId: String
+) {
+  summarizeInAppChatConversations(
+    input: {
+      identityId: $identityId
+      statuses: $statuses
+      category: $category
+      contextKind: $contextKind
+      contextSubtype: $contextSubtype
+      contextId: $contextId
+    }
+  ) {
+    count
+  }
+}

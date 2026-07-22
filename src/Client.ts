@@ -13,6 +13,8 @@ import {
   AssetDocument,
   FetchCartDocument,
   FetchContactsDocument,
+  FetchInAppChatConversationDocument,
+  FetchInAppChatConversationsDocument,
   FetchInAppChatMessagesDocument,
   FetchInAppMessagesAggregateDocument,
   FetchInAppMessagesDocument,
@@ -31,6 +33,8 @@ import {
   SendInAppChatMessageDocument,
   StartInAppChatConversationDocument,
   SubscribeContactDocument,
+  SummarizeInAppChatConversationsDocument,
+  SummarizeInAppChatMessagesDocument,
   TrackEventDocument,
   TrackMessageDocument,
   TransferCartDocument,
@@ -147,6 +151,78 @@ type FetchInAppChatMessagesArgs = {
   conversationId: string,
   limit?: number,
   page?: number,
+}
+
+// ── InApp-chat conversation summaries (generic, domain-agnostic) ────────────
+// Wire contract for the owner-scoped summary ops. `status`/`lastSenderKind`
+// are capped strings on the wire; the SDK narrows them to these documented
+// unions at the method boundary. `context`/`topic` are `null` (not omitted)
+// when absent; the backend derives every field from the first visitor-visible
+// message's sanitized metadata, so a consumer never parses raw `data`.
+type ChatStatus = 'DRAFT' | 'ACTIVE' | 'RESOLVED'
+type LastSenderKind = 'VISITOR' | 'AGENT' | 'SYSTEM'
+
+type ChatConversationContext = {
+  kind: string,
+  subtype: string | null,
+  id: string,
+  reference: string | null,
+  name: string | null,
+}
+
+type ChatConversationTopic = {
+  id: string,
+  label: string,
+}
+
+type AssignedGroupSummary = {
+  id: string,
+  name: string,
+}
+
+type ChatConversationSummary = {
+  conversationId: string,
+  category: string,
+  context: ChatConversationContext | null,
+  topic: ChatConversationTopic | null,
+  status: ChatStatus,
+  title: string,
+  lastMessagePreview: string | null,
+  lastMessageAt: string | null,
+  lastSenderKind: LastSenderKind | null,
+  activityAt: string,
+  assignedGroups: AssignedGroupSummary[],
+}
+
+type FetchInAppChatConversationsArgs = {
+  identityId: string,
+  limit?: number,
+  page?: number,
+  statuses?: ChatStatus[],
+  category?: string,
+  contextKind?: string,
+  contextSubtype?: string,
+  contextId?: string,
+}
+
+// Same filters as the list op, minus limit/page: the inbox count that drives
+// client-side pagination (`hasNextPage = page * pageSize < count`).
+type SummarizeInAppChatConversationsArgs = {
+  identityId: string,
+  statuses?: ChatStatus[],
+  category?: string,
+  contextKind?: string,
+  contextSubtype?: string,
+  contextId?: string,
+}
+
+type FetchInAppChatConversationArgs = {
+  identityId: string,
+  conversationId: string,
+}
+
+type SummarizeInAppChatMessagesArgs = {
+  conversationId: string,
 }
 
 type ChatChannelSubscription = {
@@ -1841,6 +1917,58 @@ class Client {
     return response.data?.fetchInAppChatMessages ?? []
   }
 
+  // Owner-scoped inbox: a page of the visitor's conversation summaries, newest
+  // activity first. Returns summaries only — pagination is client-derived off
+  // `summarizeInAppChatConversations` (`hasNextPage = page * pageSize < count`).
+  // The cast narrows the wire `status`/`lastSenderKind` strings to the
+  // documented unions; the selection set fetches exactly the summary fields.
+  async fetchInAppChatConversations(args: FetchInAppChatConversationsArgs): Promise<ChatConversationSummary[]> {
+    const response = await this.graphqlClient
+      .query({
+        query: FetchInAppChatConversationsDocument,
+        variables: args,
+        fetchPolicy: 'network-only',
+      })
+    return (response.data?.fetchInAppChatConversations ?? []) as ChatConversationSummary[]
+  }
+
+  // Total conversations matching the same filters (no limit/page). Drives the
+  // inbox's client-side `hasNextPage`, mirroring `summarizeInAppChatMessages`.
+  async summarizeInAppChatConversations(args: SummarizeInAppChatConversationsArgs): Promise<{ count: number }> {
+    const response = await this.graphqlClient
+      .query({
+        query: SummarizeInAppChatConversationsDocument,
+        variables: args,
+        fetchPolicy: 'network-only',
+      })
+    return response.data!.summarizeInAppChatConversations
+  }
+
+  // Single summary for direct load / hard reload of a conversation URL (history
+  // alone can't rebuild the context strip — the message fetch omits metadata).
+  async fetchInAppChatConversation(args: FetchInAppChatConversationArgs): Promise<ChatConversationSummary> {
+    const response = await this.graphqlClient
+      .query({
+        query: FetchInAppChatConversationDocument,
+        variables: args,
+        fetchPolicy: 'network-only',
+      })
+    return response.data!.fetchInAppChatConversation as ChatConversationSummary
+  }
+
+  // Total visitor-visible message count. The hook derives the newest page
+  // (`newestPage = max(1, ceil(count / pageSize))`) and pages older from there;
+  // `fetchInAppChatMessages` itself is unchanged (bare oldest-first list).
+  async summarizeInAppChatMessages(args: SummarizeInAppChatMessagesArgs): Promise<{ count: number }> {
+    const response = await this.graphqlClient
+      .query({
+        query: SummarizeInAppChatMessagesDocument,
+        variables: args,
+        fetchPolicy: 'network-only',
+      })
+    return response.data!.summarizeInAppChatMessages
+  }
+
   // Subscribe to a realtime channel (e.g. `in_app_chat:conversation:{id}`).
   // `ready` resolves on the first server ack and REJECTS on subscribe timeout or
   // if `unsubscribe()` is called before the ack — a caller that awaits it should
@@ -2119,4 +2247,4 @@ class Client {
 
 export default Client
 export { WebsocketMessage, isTerminalCloseCode, TERMINAL_CLOSE_CODE_MIN, TERMINAL_CLOSE_CODE_MAX }
-export type { ClientParams, InAppMessages, WebsocketMessageType, InAppMessageData, InAppChatMessageData, StartInAppChatConversationArgs, SendInAppChatMessageArgs, FetchInAppChatMessagesArgs, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiNotification, AiAgentStarterMessage, AiAgentStarterSuggestion, DashXPushPayload, FirebaseMessaging, SubscribeOptions }
+export type { ClientParams, InAppMessages, WebsocketMessageType, InAppMessageData, InAppChatMessageData, StartInAppChatConversationArgs, SendInAppChatMessageArgs, FetchInAppChatMessagesArgs, ChatStatus, LastSenderKind, ChatConversationContext, ChatConversationTopic, AssignedGroupSummary, ChatConversationSummary, FetchInAppChatConversationsArgs, SummarizeInAppChatConversationsArgs, FetchInAppChatConversationArgs, SummarizeInAppChatMessagesArgs, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiNotification, AiAgentStarterMessage, AiAgentStarterSuggestion, DashXPushPayload, FirebaseMessaging, SubscribeOptions }
