@@ -1,9 +1,18 @@
+# `content` + `clientMessageId` carry the FIRST message. Supplying either
+# `issueProperties` or `data` REQUIRES both of them — the backend rejects
+# metadata with no first message to attach it to.
+#
+# `issueProperties` = durable, filterable issue properties (validated and
+# type-coerced against the routed issue type at write; a property-bearing start
+# with no matching routing rule is REJECTED, not silently dropped).
+# `data` = presentation-only metadata for the summary's category/context/topic.
 mutation StartInAppChatConversation(
   $identityId: UUID!
   $clientIdempotencyKey: String!
   $content: JSON
   $clientMessageId: String
   $data: JSON
+  $issueProperties: JSON
 ) {
   startInAppChatConversation(
     input: {
@@ -12,6 +21,7 @@ mutation StartInAppChatConversation(
       content: $content
       clientMessageId: $clientMessageId
       data: $data
+      issueProperties: $issueProperties
     }
   ) {
     id

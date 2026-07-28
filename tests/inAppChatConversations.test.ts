@@ -15,6 +15,7 @@ type Summary = {
   lastSenderKind: string | null,
   activityAt: string,
   assignedGroups: { id: string, name: string }[],
+  unreadCount: number,
 }
 
 function summary(id: string, over: Partial<Summary> = {}): Summary {
@@ -30,6 +31,7 @@ function summary(id: string, over: Partial<Summary> = {}): Summary {
     lastSenderKind: null,
     activityAt: '2026-01-01T00:00:00Z',
     assignedGroups: [],
+    unreadCount: 0,
     ...over,
   }
 }
@@ -59,12 +61,33 @@ function makeClient(dataset: Summary[] = []) {
         return { data: { fetchInAppChatConversation: dataset.find((s) => s.conversationId === v.conversationId) ?? null } }
       case 'SummarizeInAppChatMessages':
         return { data: { summarizeInAppChatMessages: { count: 7 } } }
+      case 'SummarizeInAppChatUnread':
+        return { data: { summarizeInAppChatUnread: { count: dataset.reduce((n, s) => n + s.unreadCount, 0) } } }
       default:
         throw new Error(`unexpected operation ${name}`)
     }
   })
-  ;(client as any).graphqlClient = { query }
-  return { client, query }
+  // Mark-read and End chat are mutations. `resolve` echoes the stored row with
+  // status flipped, mirroring the backend contract (returns the UPDATED summary).
+  const mutate = vi.fn(async (opts: any) => {
+    const name = opName(opts.mutation)
+    const v = opts.variables ?? {}
+    switch (name) {
+      case 'MarkInAppChatConversationRead':
+        return { data: { markInAppChatConversationRead: { success: true } } }
+      case 'ResolveInAppChatConversation': {
+        const row = dataset.find((s) => s.conversationId === v.conversationId)
+        if (!row) return { data: { resolveInAppChatConversation: null } }
+        // ACTIVE -> RESOLVED; anything else is a no-op returning its own status.
+        const status = row.status === 'ACTIVE' ? 'RESOLVED' : row.status
+        return { data: { resolveInAppChatConversation: { ...row, status } } }
+      }
+      default:
+        throw new Error(`unexpected mutation ${name}`)
+    }
+  })
+  ;(client as any).graphqlClient = { query, mutate }
+  return { client, query, mutate }
 }
 
 beforeEach(() => {
@@ -80,10 +103,8 @@ describe('fetchInAppChatConversations', () => {
       limit: 10,
       page: 2,
       statuses: [ 'DRAFT', 'ACTIVE' ],
-      category: 'contextual',
-      contextKind: 'order',
-      contextSubtype: 'medicine',
-      contextId: 'ord-99',
+      // Generic issue-property filter — replaces the removed category/context* params.
+      properties: { category: 'contextual', orderType: 'medicine', orderId: 'ord-99', attempt: 2, urgent: true },
     })
 
     expect(query).toHaveBeenCalledTimes(1)
@@ -92,11 +113,12 @@ describe('fetchInAppChatConversations', () => {
       limit: 10,
       page: 2,
       statuses: [ 'DRAFT', 'ACTIVE' ],
-      category: 'contextual',
-      contextKind: 'order',
-      contextSubtype: 'medicine',
-      contextId: 'ord-99',
+      properties: { category: 'contextual', orderType: 'medicine', orderId: 'ord-99', attempt: 2, urgent: true },
     })
+    // The removed params must not be resurrected as undefined keys.
+    for (const gone of [ 'category', 'contextKind', 'contextSubtype', 'contextId' ]) {
+      expect(query.mock.calls[0][0].variables).not.toHaveProperty(gone)
+    }
     expect(query.mock.calls[0][0].fetchPolicy).toBe('network-only')
   })
 
@@ -119,10 +141,7 @@ describe('summarizeInAppChatConversations', () => {
     const result = await client.summarizeInAppChatConversations({
       identityId: 'id-1',
       statuses: [ 'ACTIVE' ],
-      category: 'contextual',
-      contextKind: 'order',
-      contextSubtype: 'medicine',
-      contextId: 'ord-99',
+      properties: { orderId: 'ord-99' },
     })
 
     expect(result).toEqual({ count: 3 })
@@ -132,10 +151,7 @@ describe('summarizeInAppChatConversations', () => {
     expect(vars).toMatchObject({
       identityId: 'id-1',
       statuses: [ 'ACTIVE' ],
-      category: 'contextual',
-      contextKind: 'order',
-      contextSubtype: 'medicine',
-      contextId: 'ord-99',
+      properties: { orderId: 'ord-99' },
     })
   })
 })
@@ -184,5 +200,122 @@ describe('summarizeInAppChatMessages', () => {
 
     expect(result).toEqual({ count: 7 })
     expect(query.mock.calls[0][0].variables).toEqual({ conversationId: 'conv-1' })
+  })
+})
+
+describe('unreadCount mapping [C-unread]', () => {
+  it('surfaces the per-conversation unreadCount on list and single summaries', async () => {
+    const { client } = makeClient([ summary('c1', { unreadCount: 3 }), summary('c2') ])
+
+    const rows = await client.fetchInAppChatConversations({ identityId: 'id-1' })
+    expect(rows.map((r) => r.unreadCount)).toEqual([ 3, 0 ])
+
+    const one = await client.fetchInAppChatConversation({ identityId: 'id-1', conversationId: 'c1' })
+    expect(one.unreadCount).toBe(3)
+  })
+})
+
+describe('summarizeInAppChatUnread [C-unread]', () => {
+  it('forwards identityId only and returns { count }', async () => {
+    const { client, query } = makeClient([ summary('c1', { unreadCount: 2 }), summary('c2', { unreadCount: 5 }) ])
+
+    const result = await client.summarizeInAppChatUnread({ identityId: 'id-1' })
+
+    expect(result).toEqual({ count: 7 })
+    expect(query.mock.calls[0][0].variables).toEqual({ identityId: 'id-1' })
+    expect(query.mock.calls[0][0].fetchPolicy).toBe('network-only')
+  })
+})
+
+describe('markInAppChatConversationRead [C-unread]', () => {
+  it('forwards identityId, conversationId AND lastMessageId, returning { success }', async () => {
+    const { client, mutate } = makeClient([ summary('c1', { unreadCount: 4 }) ])
+
+    const result = await client.markInAppChatConversationRead({
+      identityId: 'id-1',
+      conversationId: 'c1',
+      lastMessageId: 'msg-42',
+    })
+
+    expect(result).toEqual({ success: true })
+    // lastMessageId is the whole point of the revised contract: the server has no
+    // clock fallback, so dropping it here would silently mark nothing.
+    expect(mutate).toHaveBeenCalledTimes(1)
+    expect(mutate.mock.calls[0][0].variables).toEqual({
+      identityId: 'id-1',
+      conversationId: 'c1',
+      lastMessageId: 'msg-42',
+    })
+    expect(mutate.mock.calls[0][0].variables.lastMessageId).toBe('msg-42')
+  })
+
+  it('is conversation-scoped and idempotent — repeating a mark forwards the same cursor', async () => {
+    const { client, mutate } = makeClient([ summary('c1'), summary('c2') ])
+
+    await client.markInAppChatConversationRead({ identityId: 'id-1', conversationId: 'c1', lastMessageId: 'm-9' })
+    await client.markInAppChatConversationRead({ identityId: 'id-1', conversationId: 'c1', lastMessageId: 'm-9' })
+
+    expect(mutate.mock.calls.map((c) => c[0].variables.conversationId)).toEqual([ 'c1', 'c1' ])
+    // Never carries a second conversation's id along.
+    expect(mutate.mock.calls.every((c) => c[0].variables.conversationId !== 'c2')).toBe(true)
+  })
+})
+
+describe('resolveInAppChatConversation [C-endchat]', () => {
+  it('forwards identityId + conversationId and returns the UPDATED summary (ACTIVE -> RESOLVED)', async () => {
+    const { client, mutate } = makeClient([ summary('c1', { status: 'ACTIVE' }) ])
+
+    const result = await client.resolveInAppChatConversation({ identityId: 'id-1', conversationId: 'c1' })
+
+    expect(result.status).toBe('RESOLVED')
+    expect(result.conversationId).toBe('c1')
+    expect(mutate.mock.calls[0][0].variables).toEqual({ identityId: 'id-1', conversationId: 'c1' })
+  })
+
+  it('returns a DRAFT conversation unchanged — the no-op case must not be assumed RESOLVED', async () => {
+    const { client } = makeClient([ summary('c9', { status: 'DRAFT' }) ])
+
+    const result = await client.resolveInAppChatConversation({ identityId: 'id-1', conversationId: 'c9' })
+
+    expect(result.status).toBe('DRAFT')
+  })
+})
+
+describe('startInAppChatConversation issueProperties [C-issueprops]', () => {
+  it('forwards issueProperties alongside content/clientMessageId/data', async () => {
+    const client = new Client({ publicKey: 'pk_test', targetEnvironment: 'test' })
+    const mutate = vi.fn().mockResolvedValue({ data: { startInAppChatConversation: { id: 'conv-1' } } })
+    ;(client as any).graphqlClient = { mutate }
+
+    await client.startInAppChatConversation({
+      identityId: 'id-1',
+      clientIdempotencyKey: 'general-abc',
+      content: { text: 'hi' },
+      clientMessageId: 'cm-1',
+      data: { category: 'general' },
+      issueProperties: { orderId: 'ord-1', companyId: 'co-1', source: 'web' },
+    })
+
+    expect(mutate.mock.calls[0][0].variables).toEqual({
+      identityId: 'id-1',
+      clientIdempotencyKey: 'general-abc',
+      content: { text: 'hi' },
+      clientMessageId: 'cm-1',
+      data: { category: 'general' },
+      issueProperties: { orderId: 'ord-1', companyId: 'co-1', source: 'web' },
+    })
+  })
+
+  it('still supports an empty start (no first message, no metadata)', async () => {
+    const client = new Client({ publicKey: 'pk_test', targetEnvironment: 'test' })
+    const mutate = vi.fn().mockResolvedValue({ data: { startInAppChatConversation: { id: 'conv-2' } } })
+    ;(client as any).graphqlClient = { mutate }
+
+    await client.startInAppChatConversation({ identityId: 'id-1', clientIdempotencyKey: 'general-xyz' })
+
+    expect(mutate.mock.calls[0][0].variables).toEqual({
+      identityId: 'id-1',
+      clientIdempotencyKey: 'general-xyz',
+    })
   })
 })

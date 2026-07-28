@@ -1,0 +1,16 @@
+# Visitor-initiated "End chat": transitions the conversation's ACTIVE linked
+# issues to a terminal (Canceled) status and returns the UPDATED summary.
+# ACTIVE -> RESOLVED is the only supported case; a DRAFT or already-terminal
+# conversation is a safe no-op that returns its status unchanged. The
+# conversation stays replyable — a later visitor message reopens it with a
+# fresh issue.
+mutation ResolveInAppChatConversation(
+  $identityId: UUID!
+  $conversationId: UUID!
+) {
+  resolveInAppChatConversation(
+    input: { identityId: $identityId, conversationId: $conversationId }
+  ) {
+    ...ChatConversationSummaryFragment
+  }
+}

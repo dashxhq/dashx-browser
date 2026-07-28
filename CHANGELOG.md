@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.9.0
+
+### Added
+
+- **In-App Chat unread + End chat.** Three new client methods, each threading the chat-surface `identityId`:
+  - `summarizeInAppChatUnread({ identityId })` → `{ count }` — global visitor-inbound unread across every conversation the visitor owns for that chat identity (the nav badge). Same owner scope as the inbox list, so a *different* valid chat identity yields `0` rather than an error.
+  - `markInAppChatConversationRead({ identityId, conversationId, lastMessageId })` → `{ success }` — marks ONE conversation read through `lastMessageId`. **`lastMessageId` is required** (see Changed). Conversation-scoped (marking A never clears B) and idempotent; the cursor only ever advances in message order, so an out-of-order call is a no-op rather than resurrecting read messages as unread.
+  - `resolveInAppChatConversation({ identityId, conversationId })` → `ChatConversationSummary` — visitor-initiated "End chat": cancels the conversation's active issues and returns the **updated** summary. `ACTIVE → RESOLVED` is the only supported case; a `DRAFT` or already-terminal conversation is a safe no-op that returns its status **unchanged**, so apply the returned status as-is rather than assuming `RESOLVED`. The conversation stays replyable — a later send reopens it with a fresh issue.
+- **`unreadCount` on `ChatConversationSummary`** (additive, non-null) — visitor-inbound messages sorting after the conversation's read cursor. The visitor's own messages never contribute. Returned by `fetchInAppChatConversations`, `fetchInAppChatConversation`, and `resolveInAppChatConversation`.
+- **`issueProperties` on `startInAppChatConversation`** — durable, filterable issue properties (`Record<string, string | number | boolean>`), validated and type-coerced against the routed issue type at write. Distinct from `data`, which stays presentation-only metadata for the summary's `category`/`context`/`topic`.
+- New exported types: `ChatIssuePropertyValue`, `SummarizeInAppChatUnreadArgs`, `MarkInAppChatConversationReadArgs`, `ResolveInAppChatConversationArgs`.
+
+### Changed
+
+- **BREAKING — inbox metadata filters replaced by a generic `properties` filter.** `fetchInAppChatConversations` and `summarizeInAppChatConversations` no longer accept `category`, `contextKind`, `contextSubtype`, or `contextId`. They take `properties?: Record<string, ChatIssuePropertyValue>` instead — a key→scalar equality filter matched by JSONB containment against the conversation's current non-test issues. Presentation metadata (`data`) is no longer filterable; durable filtering belongs to issue properties. **Migration:** move the four params into `properties` using the keys your `issueProperties` actually writes (e.g. `{ category: 'contextual', orderId: 'ord-99' }`). `null` is not an accepted value — omit the key.
+- **BREAKING — `startInAppChatConversation` argument types now encode the first-message requirement.** `data` and `issueProperties` both attach to the conversation's first message, so the backend rejects either without `content` + `clientMessageId`. That combination is now a compile error rather than a runtime rejection: either start empty (`{ identityId, clientIdempotencyKey }`) or start with a first message (`content` + `clientMessageId`, optionally plus `data`/`issueProperties`). Passing `content` without `clientMessageId` is likewise now rejected at compile time.
+- **`markInAppChatConversationRead` requires `lastMessageId`.** There is no client timestamp and no server-stamped `read_through = now()` fallback: the server resolves the id to a message it validates belongs to that conversation, then stores it as an **ordered** read cursor, and unread compares `(turnSeq, createdAt, id)` row values against it. A timestamp boundary was abandoned because chat `sentAt` values are application-generated, so a later, never-delivered message can tie or precede the marker and read as already-read. A conversation with nothing rendered yet has nothing to mark — don't call it (omitting the id fails `InvalidArgumentError`).
+
 ## 0.8.0
 
 ### Added

@@ -25,8 +25,10 @@ import {
   IdentifyAccountDocument,
   InvokeAiAgentDocument,
   LoadAiAgentDocument,
+  MarkInAppChatConversationReadDocument,
   PrepareAssetDocument,
   RemoveCouponFromCartDocument,
+  ResolveInAppChatConversationDocument,
   SaveContactsDocument,
   SaveStoredPreferencesDocument,
   SearchRecordsDocument,
@@ -35,6 +37,7 @@ import {
   SubscribeContactDocument,
   SummarizeInAppChatConversationsDocument,
   SummarizeInAppChatMessagesDocument,
+  SummarizeInAppChatUnreadDocument,
   TrackEventDocument,
   TrackMessageDocument,
   TransferCartDocument,
@@ -132,13 +135,33 @@ type InAppChatMessageData = Pick<
   'id' | 'externalUid' | 'conversationId' | 'senderId' | 'aiRole' | 'renderedContent' | 'sentAt' | 'createdAt'
 > & { turnSeq?: number }
 
+// Scalar values accepted in a generic issue-property map. Deliberately excludes
+// `null`: a null is ambiguous under JSONB containment on the filter side, and
+// the write side rejects it — omit the key instead.
+type ChatIssuePropertyValue = string | number | boolean
+
+// `data` (presentation metadata) and `issueProperties` (durable, filterable
+// issue properties) both attach to the conversation's FIRST message, so the
+// backend rejects either without `content` + `clientMessageId`. Encoded as a
+// union so that combination is a compile error rather than a runtime rejection:
+// either start empty, or start with a first message (and optionally metadata).
 type StartInAppChatConversationArgs = {
   identityId: string,
   clientIdempotencyKey: string,
-  content?: Record<string, any>,
-  clientMessageId?: string,
-  data?: Record<string, any>,
-}
+} & (
+  | {
+    content: Record<string, any>,
+    clientMessageId: string,
+    data?: Record<string, any>,
+    issueProperties?: Record<string, ChatIssuePropertyValue>,
+  }
+  | {
+    content?: undefined,
+    clientMessageId?: undefined,
+    data?: undefined,
+    issueProperties?: undefined,
+  }
+)
 
 type SendInAppChatMessageArgs = {
   conversationId: string,
@@ -192,6 +215,10 @@ type ChatConversationSummary = {
   lastSenderKind: LastSenderKind | null,
   activityAt: string,
   assignedGroups: AssignedGroupSummary[],
+  // Visitor-inbound messages sorting after the conversation's read cursor.
+  // Always a number (a COUNT never yields null); the visitor's own messages
+  // never contribute. Cleared via `markInAppChatConversationRead`.
+  unreadCount: number,
 }
 
 type FetchInAppChatConversationsArgs = {
@@ -199,10 +226,11 @@ type FetchInAppChatConversationsArgs = {
   limit?: number,
   page?: number,
   statuses?: ChatStatus[],
-  category?: string,
-  contextKind?: string,
-  contextSubtype?: string,
-  contextId?: string,
+  // Generic issue-property equality filter, matched by JSONB containment
+  // against the conversation's current non-test issues. Replaces the removed
+  // `category`/`contextKind`/`contextSubtype`/`contextId` params — those read
+  // presentation metadata, which is no longer filterable.
+  properties?: Record<string, ChatIssuePropertyValue>,
 }
 
 // Same filters as the list op, minus limit/page: the inbox count that drives
@@ -210,10 +238,7 @@ type FetchInAppChatConversationsArgs = {
 type SummarizeInAppChatConversationsArgs = {
   identityId: string,
   statuses?: ChatStatus[],
-  category?: string,
-  contextKind?: string,
-  contextSubtype?: string,
-  contextId?: string,
+  properties?: Record<string, ChatIssuePropertyValue>,
 }
 
 type FetchInAppChatConversationArgs = {
@@ -222,6 +247,28 @@ type FetchInAppChatConversationArgs = {
 }
 
 type SummarizeInAppChatMessagesArgs = {
+  conversationId: string,
+}
+
+// Global unread across every conversation the visitor owns for this chat
+// identity — the nav badge. Same owner scope as the inbox list.
+type SummarizeInAppChatUnreadArgs = {
+  identityId: string,
+}
+
+// `lastMessageId` is REQUIRED: the newest message the caller actually observed.
+// The server validates it is a visible message of that conversation and stores
+// it as an ordered read cursor — no client clock is sent and there is no
+// server-stamped fallback, so a conversation with nothing rendered yet must not
+// call this at all (omitting the id is an `InvalidArgumentError`).
+type MarkInAppChatConversationReadArgs = {
+  identityId: string,
+  conversationId: string,
+  lastMessageId: string,
+}
+
+type ResolveInAppChatConversationArgs = {
+  identityId: string,
   conversationId: string,
 }
 
@@ -1969,6 +2016,41 @@ class Client {
     return response.data!.summarizeInAppChatMessages
   }
 
+  // Global visitor-inbound unread across every conversation owned for this chat
+  // identity — drives the nav badge. Same owner scope as the inbox list, so a
+  // different valid chat identity yields 0 rather than an error.
+  async summarizeInAppChatUnread(args: SummarizeInAppChatUnreadArgs): Promise<{ count: number }> {
+    const response = await this.graphqlClient
+      .query({
+        query: SummarizeInAppChatUnreadDocument,
+        variables: args,
+        fetchPolicy: 'network-only',
+      })
+    return response.data!.summarizeInAppChatUnread
+  }
+
+  // Mark ONE conversation read through `lastMessageId` (REQUIRED — the newest
+  // message the caller actually rendered). Conversation-scoped: marking A never
+  // clears B. Idempotent, and the cursor only ever advances in message order, so
+  // an out-of-order call is a silent no-op rather than resurrecting read
+  // messages. Don't call it for a conversation with nothing rendered yet.
+  async markInAppChatConversationRead(args: MarkInAppChatConversationReadArgs): Promise<{ success: boolean }> {
+    const response = await this.graphqlClient
+      .mutate({ mutation: MarkInAppChatConversationReadDocument, variables: args })
+    return response.data!.markInAppChatConversationRead
+  }
+
+  // Visitor-initiated "End chat": cancels the conversation's active issues and
+  // returns the UPDATED summary — RESOLVED for an ACTIVE conversation (the only
+  // supported case); a DRAFT or already-terminal one is a no-op returning its
+  // status unchanged. Apply the returned status as-is rather than assuming
+  // RESOLVED. The conversation stays replyable; a later send reopens it.
+  async resolveInAppChatConversation(args: ResolveInAppChatConversationArgs): Promise<ChatConversationSummary> {
+    const response = await this.graphqlClient
+      .mutate({ mutation: ResolveInAppChatConversationDocument, variables: args })
+    return response.data!.resolveInAppChatConversation as ChatConversationSummary
+  }
+
   // Subscribe to a realtime channel (e.g. `in_app_chat:conversation:{id}`).
   // `ready` resolves on the first server ack and REJECTS on subscribe timeout or
   // if `unsubscribe()` is called before the ack — a caller that awaits it should
@@ -2247,4 +2329,4 @@ class Client {
 
 export default Client
 export { WebsocketMessage, isTerminalCloseCode, TERMINAL_CLOSE_CODE_MIN, TERMINAL_CLOSE_CODE_MAX }
-export type { ClientParams, InAppMessages, WebsocketMessageType, InAppMessageData, InAppChatMessageData, StartInAppChatConversationArgs, SendInAppChatMessageArgs, FetchInAppChatMessagesArgs, ChatStatus, LastSenderKind, ChatConversationContext, ChatConversationTopic, AssignedGroupSummary, ChatConversationSummary, FetchInAppChatConversationsArgs, SummarizeInAppChatConversationsArgs, FetchInAppChatConversationArgs, SummarizeInAppChatMessagesArgs, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiNotification, AiAgentStarterMessage, AiAgentStarterSuggestion, DashXPushPayload, FirebaseMessaging, SubscribeOptions }
+export type { ClientParams, InAppMessages, WebsocketMessageType, InAppMessageData, InAppChatMessageData, StartInAppChatConversationArgs, SendInAppChatMessageArgs, FetchInAppChatMessagesArgs, ChatStatus, LastSenderKind, ChatConversationContext, ChatConversationTopic, AssignedGroupSummary, ChatConversationSummary, ChatIssuePropertyValue, FetchInAppChatConversationsArgs, SummarizeInAppChatConversationsArgs, FetchInAppChatConversationArgs, SummarizeInAppChatMessagesArgs, SummarizeInAppChatUnreadArgs, MarkInAppChatConversationReadArgs, ResolveInAppChatConversationArgs, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiNotification, AiAgentStarterMessage, AiAgentStarterSuggestion, DashXPushPayload, FirebaseMessaging, SubscribeOptions }

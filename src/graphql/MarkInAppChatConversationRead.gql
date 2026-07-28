@@ -1,0 +1,25 @@
+# Mark ONE conversation read up to `lastMessageId` — REQUIRED, the newest
+# message the caller actually observed. The server validates it is a visible
+# message of that conversation and stores it as an ordered read cursor; unread
+# then compares (turnSeq, createdAt, id) row values against it.
+#
+# No clock on either side: no client timestamp is accepted and there is no
+# server-stamped fallback. Omitting `lastMessageId` fails InvalidArgumentError,
+# so a conversation with nothing rendered yet simply must not call this.
+# Conversation-scoped (marking A never clears B) and idempotent; the cursor
+# advances only in message order, so an out-of-order mark is a no-op.
+mutation MarkInAppChatConversationRead(
+  $identityId: UUID!
+  $conversationId: UUID!
+  $lastMessageId: UUID!
+) {
+  markInAppChatConversationRead(
+    input: {
+      identityId: $identityId
+      conversationId: $conversationId
+      lastMessageId: $lastMessageId
+    }
+  ) {
+    success
+  }
+}
