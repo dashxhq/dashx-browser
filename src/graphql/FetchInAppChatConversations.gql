@@ -1,12 +1,14 @@
+# Owner-scoped inbox page. `properties` is a generic issue-property equality
+# filter (key -> scalar) matched by JSONB containment against the conversation's
+# current non-test issues — it REPLACES the removed `category`/`contextKind`/
+# `contextSubtype`/`contextId` params. Pagination is client-derived from
+# `SummarizeInAppChatConversations` (no pageInfo, no limit+1 probe).
 query FetchInAppChatConversations(
   $identityId: UUID!
   $limit: Int
   $page: Int
   $statuses: [String!]
-  $category: String
-  $contextKind: String
-  $contextSubtype: String
-  $contextId: String
+  $properties: JSON
 ) {
   fetchInAppChatConversations(
     input: {
@@ -14,10 +16,7 @@ query FetchInAppChatConversations(
       limit: $limit
       page: $page
       statuses: $statuses
-      category: $category
-      contextKind: $contextKind
-      contextSubtype: $contextSubtype
-      contextId: $contextId
+      properties: $properties
     }
   ) {
     ...ChatConversationSummaryFragment

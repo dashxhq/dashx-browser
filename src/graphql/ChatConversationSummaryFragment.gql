@@ -22,4 +22,8 @@ fragment ChatConversationSummaryFragment on ChatConversationSummary {
     id
     name
   }
+  # Visitor-inbound unread: visible messages not sent by the visitor that sort
+  # after the conversation's read cursor. Non-null (a COUNT always yields a
+  # value); cleared by `markInAppChatConversationRead`.
+  unreadCount
 }
