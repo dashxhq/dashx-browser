@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.10.0
+
+### Removed
+
+- **BREAKING — `startInAppChatConversation` is gone.** Creating an In-App Chat conversation is now a **server-only** operation and this SDK no longer exposes it. DashX rejects identity-token callers outright (`PermissionDenied`) and requires an `accountUid` naming the visitor — a value a browser has no authority to assert. Anything a browser could send as `data` or `issueProperties` is metadata the agent console trusts, so it must be derived by your backend, not by the client.
+
+  **Migration.** Move creation behind your own endpoint:
+
+  1. your client posts its *intent* (what the user is asking about) to your backend;
+  2. your backend validates that intent, derives `data`/`issueProperties` itself, and calls `startInAppChatConversation` with the workspace public/private key pair — for JVM backends, `dashx-java` ≥ 1.5.0 exposes `DashX.startInAppChatConversation(input)`;
+  3. it returns the `conversationId` to the client, which then uses the participation methods below.
+
+  There is no client-side replacement, and this is deliberate. Note the old method could not have kept working regardless: `accountUid` is a required input field, so a 0.9.0-shaped request now fails schema validation before authorization is even considered.
+- The `StartInAppChatConversationArgs` type is no longer exported.
+
+### Unchanged
+
+- Every participation method still works exactly as before, by `conversationId`: `sendInAppChatMessage`, `fetchInAppChatMessages`, `summarizeInAppChatMessages`, `fetchInAppChatConversations`, `fetchInAppChatConversation`, `summarizeInAppChatConversations`, `summarizeInAppChatUnread`, `markInAppChatConversationRead`, `resolveInAppChatConversation`, and `subscribeToChannel`. Identity tokens retain full read/send/mark-read/resolve/subscribe access — only creation moved.
+
 ## 0.9.0
 
 ### Added

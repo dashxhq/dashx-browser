@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import DashX from '../src/index'
 import Client from '../src/Client'
 
 // Minimal generic summary row (matches the wire contract's required fields).
@@ -281,41 +282,15 @@ describe('resolveInAppChatConversation [C-endchat]', () => {
   })
 })
 
-describe('startInAppChatConversation issueProperties [C-issueprops]', () => {
-  it('forwards issueProperties alongside content/clientMessageId/data', async () => {
+describe('conversation creation is NOT part of this SDK [C-serveronly]', () => {
+  it('exposes no conversation-creation method', () => {
     const client = new Client({ publicKey: 'pk_test', targetEnvironment: 'test' })
-    const mutate = vi.fn().mockResolvedValue({ data: { startInAppChatConversation: { id: 'conv-1' } } })
-    ;(client as any).graphqlClient = { mutate }
 
-    await client.startInAppChatConversation({
-      identityId: 'id-1',
-      clientIdempotencyKey: 'general-abc',
-      content: { text: 'hi' },
-      clientMessageId: 'cm-1',
-      data: { category: 'general' },
-      issueProperties: { orderId: 'ord-1', companyId: 'co-1', source: 'web' },
-    })
-
-    expect(mutate.mock.calls[0][0].variables).toEqual({
-      identityId: 'id-1',
-      clientIdempotencyKey: 'general-abc',
-      content: { text: 'hi' },
-      clientMessageId: 'cm-1',
-      data: { category: 'general' },
-      issueProperties: { orderId: 'ord-1', companyId: 'co-1', source: 'web' },
-    })
-  })
-
-  it('still supports an empty start (no first message, no metadata)', async () => {
-    const client = new Client({ publicKey: 'pk_test', targetEnvironment: 'test' })
-    const mutate = vi.fn().mockResolvedValue({ data: { startInAppChatConversation: { id: 'conv-2' } } })
-    ;(client as any).graphqlClient = { mutate }
-
-    await client.startInAppChatConversation({ identityId: 'id-1', clientIdempotencyKey: 'general-xyz' })
-
-    expect(mutate.mock.calls[0][0].variables).toEqual({
-      identityId: 'id-1',
-      clientIdempotencyKey: 'general-xyz',
-    })
+    // Creating a chat is server-only: DashX rejects identity-token callers and requires an
+    // `accountUid` the browser has no business asserting. The tenant's backend creates the
+    // conversation and hands over its id. Asserted rather than merely deleted, so a future
+    // "convenience" re-add fails here instead of shipping a browser-side create path.
+    expect((client as any).startInAppChatConversation).toBeUndefined()
+    expect((DashX as any).startInAppChatConversation).toBeUndefined()
   })
 })

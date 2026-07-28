@@ -12,7 +12,6 @@ import type {
   WebsocketMessageType,
   InAppMessageData,
   InAppChatMessageData,
-  StartInAppChatConversationArgs,
   SendInAppChatMessageArgs,
   FetchInAppChatMessagesArgs,
   ChatStatus,
@@ -126,7 +125,6 @@ const DashX = {
   invokeAiAgent(options: { publicEmbedKey: string; prompt: string; conversationId?: string }) { return ensureConfigured().invokeAiAgent(options) },
 
   // InApp Chat
-  startInAppChatConversation(args: StartInAppChatConversationArgs) { return ensureConfigured().startInAppChatConversation(args) },
   sendInAppChatMessage(args: SendInAppChatMessageArgs) { return ensureConfigured().sendInAppChatMessage(args) },
   fetchInAppChatMessages(args: FetchInAppChatMessagesArgs) { return ensureConfigured().fetchInAppChatMessages(args) },
   fetchInAppChatConversations(args: FetchInAppChatConversationsArgs) { return ensureConfigured().fetchInAppChatConversations(args) },
@@ -192,7 +190,6 @@ export type {
   ProductVariantRelease,
   ResolveInAppChatConversationArgs,
   SendInAppChatMessageArgs,
-  StartInAppChatConversationArgs,
   SummarizeInAppChatConversationsArgs,
   SummarizeInAppChatMessagesArgs,
   SummarizeInAppChatUnreadArgs,

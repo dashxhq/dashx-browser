@@ -33,7 +33,6 @@ import {
   SaveStoredPreferencesDocument,
   SearchRecordsDocument,
   SendInAppChatMessageDocument,
-  StartInAppChatConversationDocument,
   SubscribeContactDocument,
   SummarizeInAppChatConversationsDocument,
   SummarizeInAppChatMessagesDocument,
@@ -139,29 +138,6 @@ type InAppChatMessageData = Pick<
 // `null`: a null is ambiguous under JSONB containment on the filter side, and
 // the write side rejects it — omit the key instead.
 type ChatIssuePropertyValue = string | number | boolean
-
-// `data` (presentation metadata) and `issueProperties` (durable, filterable
-// issue properties) both attach to the conversation's FIRST message, so the
-// backend rejects either without `content` + `clientMessageId`. Encoded as a
-// union so that combination is a compile error rather than a runtime rejection:
-// either start empty, or start with a first message (and optionally metadata).
-type StartInAppChatConversationArgs = {
-  identityId: string,
-  clientIdempotencyKey: string,
-} & (
-  | {
-    content: Record<string, any>,
-    clientMessageId: string,
-    data?: Record<string, any>,
-    issueProperties?: Record<string, ChatIssuePropertyValue>,
-  }
-  | {
-    content?: undefined,
-    clientMessageId?: undefined,
-    data?: undefined,
-    issueProperties?: undefined,
-  }
-)
 
 type SendInAppChatMessageArgs = {
   conversationId: string,
@@ -1941,12 +1917,10 @@ class Client {
   }
 
   // ── InApp Chat ──────────────────────────────────────────────────────────
-
-  async startInAppChatConversation(args: StartInAppChatConversationArgs): Promise<{ id: string }> {
-    const response = await this.graphqlClient
-      .mutate({ mutation: StartInAppChatConversationDocument, variables: args })
-    return response.data!.startInAppChatConversation
-  }
+  // Participation only — there is deliberately NO conversation-creation method here.
+  // Creating a chat is server-only (DashX rejects identity-token callers and requires
+  // `accountUid`), so a conversation is created by the tenant's backend, which hands the
+  // `conversationId` to the client. Everything below works within an existing conversation.
 
   async sendInAppChatMessage(args: SendInAppChatMessageArgs): Promise<InAppChatMessageData> {
     const response = await this.graphqlClient
@@ -2329,4 +2303,4 @@ class Client {
 
 export default Client
 export { WebsocketMessage, isTerminalCloseCode, TERMINAL_CLOSE_CODE_MIN, TERMINAL_CLOSE_CODE_MAX }
-export type { ClientParams, InAppMessages, WebsocketMessageType, InAppMessageData, InAppChatMessageData, StartInAppChatConversationArgs, SendInAppChatMessageArgs, FetchInAppChatMessagesArgs, ChatStatus, LastSenderKind, ChatConversationContext, ChatConversationTopic, AssignedGroupSummary, ChatConversationSummary, ChatIssuePropertyValue, FetchInAppChatConversationsArgs, SummarizeInAppChatConversationsArgs, FetchInAppChatConversationArgs, SummarizeInAppChatMessagesArgs, SummarizeInAppChatUnreadArgs, MarkInAppChatConversationReadArgs, ResolveInAppChatConversationArgs, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiNotification, AiAgentStarterMessage, AiAgentStarterSuggestion, DashXPushPayload, FirebaseMessaging, SubscribeOptions }
+export type { ClientParams, InAppMessages, WebsocketMessageType, InAppMessageData, InAppChatMessageData, SendInAppChatMessageArgs, FetchInAppChatMessagesArgs, ChatStatus, LastSenderKind, ChatConversationContext, ChatConversationTopic, AssignedGroupSummary, ChatConversationSummary, ChatIssuePropertyValue, FetchInAppChatConversationsArgs, SummarizeInAppChatConversationsArgs, FetchInAppChatConversationArgs, SummarizeInAppChatMessagesArgs, SummarizeInAppChatUnreadArgs, MarkInAppChatConversationReadArgs, ResolveInAppChatConversationArgs, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiNotification, AiAgentStarterMessage, AiAgentStarterSuggestion, DashXPushPayload, FirebaseMessaging, SubscribeOptions }
