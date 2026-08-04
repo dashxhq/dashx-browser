@@ -2242,10 +2242,23 @@ class Client {
       return
     }
 
+    // The server scopes the account subscription to an identified visitor, so a
+    // uid without an identity token is rejected. Omit it rather than earning a
+    // permission error on every connect; `targetProduct` is unrelated and stays.
+    // `identify()` and single-arg `setIdentity()` both leave the token null, so
+    // warn instead of dropping live in-app messages with no explanation.
+    if (this.#accountUid && !this.#identityToken) {
+      this.logger.warn(
+        'accountUid is set but no identity token is configured — skipping the in-app message '
+        + 'subscription, so live in-app messages will not arrive. Pass a token via '
+        + 'setIdentity(uid, token) to enable them.'
+      )
+    }
+
     const subscribeMessage: WebsocketMessageType = {
       type: WebsocketMessage.SUBSCRIBE,
       data: {
-        accountUid: this.#accountUid,
+        ...(this.#identityToken ? { accountUid: this.#accountUid } : {}),
         targetProduct: this.targetProduct,
       },
     }
