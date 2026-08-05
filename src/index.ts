@@ -91,6 +91,7 @@ const DashX = {
   getNotificationPermission() { return ensureConfigured().getNotificationPermission() },
   requestNotificationPermission() { return ensureConfigured().requestNotificationPermission() },
   showInAppChatNotification(options: Parameters<Client['showInAppChatNotification']>[0]) { return ensureConfigured().showInAppChatNotification(options) },
+  setServiceWorkerRegistration(registration: ServiceWorkerRegistration) { return ensureConfigured().setServiceWorkerRegistration(registration) },
 
   // CMS
   searchRecords(resource: string, options?: any) { return ensureConfigured().searchRecords(resource, options) },

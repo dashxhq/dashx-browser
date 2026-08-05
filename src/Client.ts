@@ -415,6 +415,11 @@ class Client {
 
   #serviceWorkerRegistration: ServiceWorkerRegistration | null = null
 
+  // Counts explicitly-supplied registrations, so an async lookup below can tell it was superseded.
+  // NOT bumped per attempt: `attachForegroundMessaging` makes two lookups back to back and the second
+  // must not invalidate the first.
+  #explicitServiceWorkerRegistrations = 0
+
   // Click handlers for chat notifications shown via the service-worker path,
   // keyed by notification tag. Invoked when the SW bridges a notificationclick
   // back to the page (see `#ensureInAppChatClickBridge`).
@@ -1287,6 +1292,18 @@ class Client {
     }
   }
 
+  /**
+   * Hand the client a service-worker registration for notification rendering, without going through push
+   * `subscribe()` / `attachForegroundMessaging()`.
+   *
+   * For consumers that only want the chat-notification fallback: `showInAppChatNotification` needs a
+   * registration where `new Notification()` is forbidden (notably Android Chrome), and every other route
+   * to one requires a Firebase `messaging` instance.
+   */
+  setServiceWorkerRegistration(registration: ServiceWorkerRegistration): void {
+    this.#ensureServiceWorkerRegistration({ registration })
+  }
+
   // Single source of truth for populating `#serviceWorkerRegistration`.
   // Preference order:
   //   1. Explicit registration passed in (`options.registration`)
@@ -1301,16 +1318,26 @@ class Client {
     registerPath?: string
   }): void {
     if (options?.registration) {
+      // Authoritative: this discards any `register()`/`ready` lookup still in flight, which would
+      // otherwise resolve later and replace it.
+      this.#explicitServiceWorkerRegistrations += 1
       this.#serviceWorkerRegistration = options.registration
       return
     }
     if (this.#serviceWorkerRegistration) return
     if (typeof navigator === 'undefined' || !navigator.serviceWorker) return
 
+    const explicitCountAtStart = this.#explicitServiceWorkerRegistrations
+    const applyUnlessSuperseded = (registration: ServiceWorkerRegistration) => {
+      if (explicitCountAtStart === this.#explicitServiceWorkerRegistrations) {
+        this.#serviceWorkerRegistration = registration
+      }
+    }
+
     if (options?.registerPath) {
       navigator.serviceWorker
         .register(options.registerPath)
-        .then((registration) => { this.#serviceWorkerRegistration = registration })
+        .then(applyUnlessSuperseded)
         .catch((error) => { this.logger.error('Error registering service worker:', error) })
       return
     }
@@ -1319,7 +1346,7 @@ class Client {
       // Don't await — the promise resolves before a push can plausibly
       // arrive, and awaiting would stall the subscribe pipeline.
       navigator.serviceWorker.ready
-        .then((registration) => { this.#serviceWorkerRegistration = registration })
+        .then(applyUnlessSuperseded)
         .catch(() => { /* no SW available; banner render will be skipped */ })
     }
   }

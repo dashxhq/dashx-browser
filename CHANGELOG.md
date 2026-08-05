@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.10.1
+
+### Added
+
+- **`setServiceWorkerRegistration(registration)`** — hand the client a service-worker registration without going through `subscribe()` or `attachForegroundMessaging()`.
+
+  `showInAppChatNotification` prefers `new Notification()` and falls back to `registration.showNotification()` where the constructor is forbidden in the page context (notably Android Chrome). Until now every route to a registration required a Firebase `messaging` instance, so a consumer that only wants chat notifications — no push, no Firebase — had no way to supply one and got a silent no-op on those browsers.
+
+  Pair it with a worker that handles `notificationclick` for `data.dashxInAppChat` and posts `{ source: 'dashx', type: 'IN_APP_CHAT_NOTIFICATION_CLICK', tag }` back to its clients — which is what `createDashXServiceWorkerHandler` from `sw-helper` already does.
+
 ## 0.10.0
 
 ### Removed
