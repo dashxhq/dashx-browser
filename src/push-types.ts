@@ -10,7 +10,5 @@ export type DashXPushPayload = {
   body?: string
   image?: string
   url?: string
-  // Notification identity: a later notification with the same tag replaces the earlier one instead
-  // of stacking beside it.
   tag?: string
 }
