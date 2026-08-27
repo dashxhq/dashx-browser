@@ -32,6 +32,39 @@ describe('generateContext', () => {
     expect(typeof screen!.width).toBe('number')
   })
 
+  it('rounds fractional screen metrics so they satisfy the Int schema', () => {
+    const originalRatio = window.devicePixelRatio
+
+    Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 2.625 })
+
+    const { screen } = generateContext()
+
+    expect(screen!.density).toBe(3)
+    expect(Number.isInteger(screen!.density)).toBe(true)
+    expect(Number.isInteger(screen!.height)).toBe(true)
+    expect(Number.isInteger(screen!.width)).toBe(true)
+
+    Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: originalRatio })
+  })
+
+  it('falls back when a browser reports a required string as undefined', () => {
+    const originalLanguage = navigator.language
+    const resolvedOptions = Intl.DateTimeFormat.prototype.resolvedOptions
+
+    Object.defineProperty(navigator, 'language', { configurable: true, value: undefined })
+    Intl.DateTimeFormat.prototype.resolvedOptions = function patched() {
+      return { ...resolvedOptions.call(this), timeZone: undefined as unknown as string }
+    }
+
+    const { locale, timeZone } = generateContext()
+
+    expect(locale).toBe('en-US')
+    expect(timeZone).toBe('UTC')
+
+    Intl.DateTimeFormat.prototype.resolvedOptions = resolvedOptions
+    Object.defineProperty(navigator, 'language', { configurable: true, value: originalLanguage })
+  })
+
   it('populates locale from navigator.language', () => {
     const { locale } = generateContext()
     expect(typeof locale).toBe('string')

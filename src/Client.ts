@@ -1419,6 +1419,7 @@ class Client {
       .showNotification(parsed.title || '', {
         body: parsed.body || '',
         icon: parsed.image,
+        tag: parsed.tag,
         data: { dashxNotificationId: parsed.id, url: parsed.url },
       })
       .catch((error) => {

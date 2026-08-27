@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.11.0
+
+### Added
+
+- **Push notifications honour `tag`.** `DashXPushPayload` now carries the `tag` DashX sends in its FCM payload, and both the foreground banner and the service-worker background handler pass it to `showNotification`. Two notifications sharing a tag replace one another instead of stacking — which is how a burst about one subject stays a single entry in the tray. Untagged pushes are unaffected.
+
+  Consumers that also raise their own notifications for the same subject (e.g. `showInAppChatNotification` from a realtime message) should use the **same** tag string, or the two will not replace each other. In-app chat pushes from DashX are tagged `in_app_chat:<conversationId>`.
+
+- **`invokeAiAgent` reports `conversationId`.** The response carries the conversation's id directly, so a caller no longer has to read it off `messages[0].conversationId` to continue the conversation with its next prompt.
+
+### Fixed
+
+- **Fractional screen metrics no longer break the context payload.** `generateContext` rounds `screen.density`, `screen.height` and `screen.width` before sending them. The schema types all three as `Int`, and `devicePixelRatio` is fractional on any scaled display or zoomed browser (1.25, 1.5, 2.625, …), so every call carrying context was rejected for those visitors. A non-finite value falls back to the documented default rather than propagating `NaN`.
+
+  `locale`, `timeZone` and `userAgent` are hardened the same way. All three are non-null `String` in the schema, and a browser that reports one as `undefined` — `Intl.DateTimeFormat().resolvedOptions().timeZone` on older Safari, `navigator.language` in some embedded webviews — previously failed variable coercion for the entire request instead of falling back.
+
 ## 0.10.2
 
 ### Added

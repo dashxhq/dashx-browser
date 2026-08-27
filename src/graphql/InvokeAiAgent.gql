@@ -1,5 +1,6 @@
 query InvokeAiAgent($input: InvokeAiAgentInput!) {
   invokeAiAgent(input: $input) {
+    conversationId
     messages {
       ...MessageFragment
     }

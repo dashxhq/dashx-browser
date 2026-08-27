@@ -185,6 +185,7 @@ function createDashXServiceWorkerHandler(config: DashXServiceWorkerConfig) {
     const notifyPromise = registration.showNotification(parsed.title || '', {
       body: parsed.body || '',
       icon: parsed.image,
+      tag: parsed.tag,
       data: { dashxNotificationId: parsed.id, url: parsed.url },
     }).catch(() => {
       // showNotification may fail if permission revoked
