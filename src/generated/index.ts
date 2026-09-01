@@ -338,7 +338,7 @@ export type SystemContextOsInput = {
 };
 
 export type SystemContextScreenInput = {
-  density: Scalars['Int']['input'];
+  density: Scalars['Float']['input'];
   height: Scalars['Int']['input'];
   width: Scalars['Int']['input'];
 };

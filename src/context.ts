@@ -1,11 +1,12 @@
 import packageInfo from '../package.json'
 import type { SystemContextInput, SystemContextLibraryInput, SystemContextScreenInput } from './generated'
 
-// The GraphQL schema types every screen dimension as Int, so fractional values
-// (devicePixelRatio is 1.25/1.5/2.625/... under display scaling or browser zoom)
-// must be rounded before they reach the API.
 function toInt(value: number, fallback: number): number {
   return Number.isFinite(value) ? Math.round(value) : fallback
+}
+
+function toFloat(value: number, fallback: number): number {
+  return Number.isFinite(value) ? value : fallback
 }
 
 // Non-null String in the schema. TS types these as `string`, but browsers can report
@@ -19,7 +20,7 @@ function getScreenDetails(): SystemContextScreenInput {
     return { density: 1, height: 0, width: 0 }
   }
   return {
-    density: toInt(window.devicePixelRatio, 1),
+    density: toFloat(window.devicePixelRatio, 1),
     height: toInt(window.screen.height, 0),
     width: toInt(window.screen.width, 0),
   }

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.0
+
+### Fixed
+
+- **`screen.density` is no longer rounded.** The schema now types it as `Float`, so `generateContext` sends `devicePixelRatio` as the browser reports it (1.25, 1.5, 2.625, …) instead of collapsing every scaled display and zoomed browser onto the nearest integer. `screen.height` and `screen.width` stay `Int` and are still rounded, and a non-finite ratio still falls back to `1`.
+
+  Requires an API that types `SystemContextScreenInput.density` as `Float`; against an older `Int` server a fractional density fails variable coercion for the whole request.
+
 ## 0.11.0
 
 ### Added

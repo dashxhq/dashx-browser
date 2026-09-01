@@ -32,17 +32,28 @@ describe('generateContext', () => {
     expect(typeof screen!.width).toBe('number')
   })
 
-  it('rounds fractional screen metrics so they satisfy the Int schema', () => {
+  it('preserves fractional density and rounds the Int screen metrics', () => {
     const originalRatio = window.devicePixelRatio
 
     Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 2.625 })
 
     const { screen } = generateContext()
 
-    expect(screen!.density).toBe(3)
-    expect(Number.isInteger(screen!.density)).toBe(true)
+    expect(screen!.density).toBe(2.625)
     expect(Number.isInteger(screen!.height)).toBe(true)
     expect(Number.isInteger(screen!.width)).toBe(true)
+
+    Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: originalRatio })
+  })
+
+  it('falls back to a density of 1 when devicePixelRatio is not finite', () => {
+    const originalRatio = window.devicePixelRatio
+
+    Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: Number.NaN })
+
+    const { screen } = generateContext()
+
+    expect(screen!.density).toBe(1)
 
     Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: originalRatio })
   })
