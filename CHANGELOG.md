@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.12.1
+
+### Fixed
+
+- **Delivery tracking no longer escapes as an unhandled rejection.** `trackMessage` is fired and forgotten when a push or in-app message arrives, so a failed mutation surfaced as an unhandled promise rejection in the host app's error reporting. Both call sites now route through a guard that logs either failure shape. `trackMessage` can also throw *synchronously* (the `READ`/`UNREAD` path throws before a promise exists when no account is identified), which a chained `.catch` would have missed.
+
+- **A refetch that fails after reconnect is logged, not thrown.** `refetchWatchedQueries` runs 100ms after the WebSocket reconnects, when the network is often still flaky. Rejections from the watched queries' `refetch()` are now caught centrally. `registerWatchedQuery` accepts a callback that returns the refetch promise; callbacks returning `void` keep working unchanged.
+
+- **The unread count survives a failed refetch.** `watchFetchInAppMessagesAggregate` emitted `0` when a refetch came back without data, flashing the badge to zero before the retry repopulated it. It now keeps the last known count and only reports a real number. A hard subscription error still reports `0`.
+
+- **A partial cache entry no longer crashes the aggregate update.** `trackMessage` and `addInAppMessageToCache` read `messagesAggregate.count` off the cached aggregate; when the entry existed but the aggregate was absent, the read threw inside the mutation update.
+
 ## 0.12.0
 
 ### Fixed
