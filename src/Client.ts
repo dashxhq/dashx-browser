@@ -431,7 +431,7 @@ class Client {
 
   #subscribePromise: Promise<{ id: string; value: string }> | null = null
 
-  #watchedQueries: Set<{ refetch: () => void; name: string }> = new Set()
+  #watchedQueries: Set<{ refetch: () => void | Promise<unknown>; name: string }> = new Set()
 
   // Highest in-app notification page currently loaded into the cache; `fetchMoreInAppMessages`
   // fetches the next one. Reset to 1 whenever the list is (re)fetched from the top.
@@ -753,7 +753,7 @@ class Client {
           data: {
             messagesAggregate: {
               __typename: 'FetchInAppMessagesAggregateResponse',
-              count: (unreadMessagesAggregate?.messagesAggregate.count || 0) + counter,
+              count: (unreadMessagesAggregate?.messagesAggregate?.count || 0) + counter,
             },
           },
           variables: fetchInAppMessagesAggregateVariables,
@@ -966,7 +966,7 @@ class Client {
       data: {
         messagesAggregate: {
           __typename: 'FetchInAppMessagesAggregateResponse',
-          count: (unreadMessagesAggregate?.messagesAggregate.count || 0) + 1,
+          count: (unreadMessagesAggregate?.messagesAggregate?.count || 0) + 1,
         },
       },
       variables: fetchInAppMessagesAggregateVariables,
@@ -1001,7 +1001,7 @@ class Client {
       // loaded via fetchMoreInAppMessages are dropped and re-pulled on demand.
       this.registerWatchedQuery(() => {
         this.#inAppMessagesPage = 1
-        this.#inAppMessagesObservable?.refetch()
+        return this.#inAppMessagesObservable?.refetch()
       }, 'watchFetchInAppMessages')
     }
 
@@ -1050,13 +1050,16 @@ class Client {
     })
 
     // Register this query for automatic refetch on WebSocket reconnection
-    this.registerWatchedQuery(() => {
-      observableQuery.refetch()
-    }, 'watchFetchInAppMessagesAggregate')
+    this.registerWatchedQuery(() => observableQuery.refetch(), 'watchFetchInAppMessagesAggregate')
 
     const subscription = observableQuery.subscribe({
       next(_response: any) {
-        callback(_response.data?.messagesAggregate.count || 0)
+        // A refetch that fails mid-flight emits without data; keep the last known count
+        // rather than flashing the badge to 0.
+        const count = _response.data?.messagesAggregate?.count
+        if (count != null) {
+          callback(count)
+        }
       },
       error: (_err: any) => {
         this.logger.error(_err)
@@ -1447,7 +1450,9 @@ class Client {
       // path. Firebase's contract is that the two paths are mutually
       // exclusive for a given message.
       if (parsed.id) {
-        this.trackMessage({ id: parsed.id, status: TRACK_MESSAGE_STATUS.DELIVERED })
+        this.trackMessage({ id: parsed.id, status: TRACK_MESSAGE_STATUS.DELIVERED }).catch((error) => {
+          this.logger.error('Failed to track push message delivery:', error)
+        })
       }
 
       this.#dispatchToPushCallbacks(parsed)
@@ -1866,9 +1871,7 @@ class Client {
     })
 
     // Register this query for automatic refetch on WebSocket reconnection
-    this.registerWatchedQuery(() => {
-      observableQuery.refetch()
-    }, 'watchFetchProductVariantReleaseRule')
+    this.registerWatchedQuery(() => observableQuery.refetch(), 'watchFetchProductVariantReleaseRule')
 
     observableQuery.subscribe({
       next(_response: any) {
@@ -1900,8 +1903,9 @@ class Client {
     return this.#websocketManager?.isConnected ?? false
   }
 
-  // Register a watched query for automatic refetch on WebSocket reconnection
-  registerWatchedQuery(refetch: () => void, name: string): void {
+  // Register a watched query for automatic refetch on WebSocket reconnection.
+  // `refetch` may return the refetch promise so rejections can be handled centrally.
+  registerWatchedQuery(refetch: () => void | Promise<unknown>, name: string): void {
     this.#watchedQueries.add({ refetch, name })
   }
 
@@ -1913,13 +1917,20 @@ class Client {
     })
   }
 
-  // Trigger refetch of all watched queries
+  // Trigger refetch of all watched queries. Runs right after a WebSocket reconnect, when the
+  // network is often still flaky, so a failed refetch is expected: log it, never let it
+  // escape. `refetch` runs synchronously so callbacks that reset state before refetching
+  // (see watchFetchInAppMessages) take effect in the same tick.
   private refetchWatchedQueries(): void {
     this.#watchedQueries.forEach(({ refetch, name }) => {
-      try {
-        refetch()
-      } catch (error) {
+      const logError = (error: unknown) => {
         this.logger.error(`Error refetching ${name}:`, error)
+      }
+
+      try {
+        Promise.resolve(refetch()).catch(logError)
+      } catch (error) {
+        logError(error)
       }
     })
   }
@@ -2315,7 +2326,9 @@ class Client {
       case WebsocketMessage.IN_APP_MESSAGE:
         // Track that the message was delivered if accountUid is available
         if (this.#accountUid) {
-          this.trackMessage({ id: _message.data.id, status: TRACK_MESSAGE_STATUS.DELIVERED })
+          this.trackMessage({ id: _message.data.id, status: TRACK_MESSAGE_STATUS.DELIVERED }).catch((error) => {
+            this.logger.error('Failed to track in-app message delivery:', error)
+          })
           // Add to cache for immediate UI update
           this.addInAppMessageToCache(_message.data)
         }
