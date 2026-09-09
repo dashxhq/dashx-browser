@@ -1450,9 +1450,7 @@ class Client {
       // path. Firebase's contract is that the two paths are mutually
       // exclusive for a given message.
       if (parsed.id) {
-        this.trackMessage({ id: parsed.id, status: TRACK_MESSAGE_STATUS.DELIVERED }).catch((error) => {
-          this.logger.error('Failed to track push message delivery:', error)
-        })
+        this.#trackDelivery(parsed.id, 'push')
       }
 
       this.#dispatchToPushCallbacks(parsed)
@@ -1935,6 +1933,21 @@ class Client {
     })
   }
 
+  // Delivery tracking is fire-and-forget: the message is already in the user's hands, so a
+  // failed mutation must never surface as an unhandled rejection. `trackMessage` can also
+  // throw synchronously, so route it through Promise.resolve rather than chaining .catch.
+  #trackDelivery(id: string, source: 'push' | 'in-app'): void {
+    try {
+      Promise.resolve(
+        this.trackMessage({ id, status: TRACK_MESSAGE_STATUS.DELIVERED }),
+      ).catch((error) => {
+        this.logger.error(`Failed to track ${source} message delivery:`, error)
+      })
+    } catch (error) {
+      this.logger.error(`Failed to track ${source} message delivery:`, error)
+    }
+  }
+
   // In-app message callback management
   onInAppMessage(callback: (_message: InAppMessageData) => void): () => void {
     this.#messageCallbacks.add(callback)
@@ -2326,9 +2339,7 @@ class Client {
       case WebsocketMessage.IN_APP_MESSAGE:
         // Track that the message was delivered if accountUid is available
         if (this.#accountUid) {
-          this.trackMessage({ id: _message.data.id, status: TRACK_MESSAGE_STATUS.DELIVERED }).catch((error) => {
-            this.logger.error('Failed to track in-app message delivery:', error)
-          })
+          this.#trackDelivery(_message.data.id, 'in-app')
           // Add to cache for immediate UI update
           this.addInAppMessageToCache(_message.data)
         }

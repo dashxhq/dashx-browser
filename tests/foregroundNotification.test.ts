@@ -36,7 +36,7 @@ function makeClient() {
       data: { subscribeContact: { id: 'sub-id', value: 'fcm-token' } },
     }),
   }
-  ;(client as any).trackMessage = vi.fn()
+  ;(client as any).trackMessage = vi.fn().mockResolvedValue(undefined)
   return client
 }
 
