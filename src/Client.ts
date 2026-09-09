@@ -431,7 +431,7 @@ class Client {
 
   #subscribePromise: Promise<{ id: string; value: string }> | null = null
 
-  #watchedQueries: Set<{ refetch: () => void; name: string }> = new Set()
+  #watchedQueries: Set<{ refetch: () => void | Promise<unknown>; name: string }> = new Set()
 
   // Highest in-app notification page currently loaded into the cache; `fetchMoreInAppMessages`
   // fetches the next one. Reset to 1 whenever the list is (re)fetched from the top.
@@ -753,7 +753,7 @@ class Client {
           data: {
             messagesAggregate: {
               __typename: 'FetchInAppMessagesAggregateResponse',
-              count: (unreadMessagesAggregate?.messagesAggregate.count || 0) + counter,
+              count: (unreadMessagesAggregate?.messagesAggregate?.count || 0) + counter,
             },
           },
           variables: fetchInAppMessagesAggregateVariables,
@@ -966,7 +966,7 @@ class Client {
       data: {
         messagesAggregate: {
           __typename: 'FetchInAppMessagesAggregateResponse',
-          count: (unreadMessagesAggregate?.messagesAggregate.count || 0) + 1,
+          count: (unreadMessagesAggregate?.messagesAggregate?.count || 0) + 1,
         },
       },
       variables: fetchInAppMessagesAggregateVariables,
@@ -1054,7 +1054,12 @@ class Client {
 
     const subscription = observableQuery.subscribe({
       next(_response: any) {
-        callback(_response.data?.messagesAggregate?.count ?? 0)
+        // A refetch that fails mid-flight emits without data; keep the last known count
+        // rather than flashing the badge to 0.
+        const count = _response.data?.messagesAggregate?.count
+        if (count != null) {
+          callback(count)
+        }
       },
       error: (_err: any) => {
         this.logger.error(_err)
@@ -1913,15 +1918,20 @@ class Client {
   }
 
   // Trigger refetch of all watched queries. Runs right after a WebSocket reconnect, when the
-  // network is often still flaky, so a rejected refetch is expected and must not escape as an
-  // unhandled promise rejection.
+  // network is often still flaky, so a failed refetch is expected: log it, never let it
+  // escape. `refetch` runs synchronously so callbacks that reset state before refetching
+  // (see watchFetchInAppMessages) take effect in the same tick.
   private refetchWatchedQueries(): void {
     this.#watchedQueries.forEach(({ refetch, name }) => {
-      Promise.resolve()
-        .then(() => refetch())
-        .catch((error) => {
-          this.logger.error(`Error refetching ${name}:`, error)
-        })
+      const logError = (error: unknown) => {
+        this.logger.error(`Error refetching ${name}:`, error)
+      }
+
+      try {
+        Promise.resolve(refetch()).catch(logError)
+      } catch (error) {
+        logError(error)
+      }
     })
   }
 
