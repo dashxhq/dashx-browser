@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Page view autocapture (opt-in).** `DashX.configure({ ..., autocapture: true })`, or `startAutocapture()` / `stopAutocapture()` at runtime, tracks `$pageview` on load and on every client-side navigation (`pushState`, `replaceState`, back/forward, hash-router routes) and `$pageleave` with `durationMs` when the visitor navigates away or the tab is closed. Query-string and in-page anchor changes are not new pages. Pass `{ pageviews, pageleave }` to turn either off.
+
+  Each event carries `url`, `path`, `referrer` and `title` in its data, and `systemContext.page` plus `systemContext.sessionId` (a session ends after 30 minutes without a captured event, and on `reset()`). Events are batched through the new `trackEvents` mutation every 5 seconds or 20 events, and flushed with `fetch(..., { keepalive })` when the page is hidden so the last batch survives the unload.
+
+  Requires an API with the `trackEvents` mutation and the `page` / `sessionId` system context fields; against an older server the batch is rejected and logged. `track()` is unchanged.
+
 ## 0.12.1
 
 ### Fixed

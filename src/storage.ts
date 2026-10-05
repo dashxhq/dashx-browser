@@ -3,6 +3,8 @@ type PersistedData = {
   accountUid: string | null,
   identityToken: string | null,
   fcmToken: string | null,
+  sessionId: string | null,
+  sessionLastActivityAt: number | null,
 }
 
 const LOCAL_STORAGE_KEY = 'dashx-sdk'

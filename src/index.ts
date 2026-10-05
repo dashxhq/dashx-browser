@@ -39,6 +39,7 @@ import type {
   SubscribeOptions,
 } from './Client'
 import type { WebSocketOptions, QueuedMessage } from './WebSocketManager'
+import type { AutocaptureOptions } from './autocapture'
 import type { ContactKind, ContactStatus, TrackMessageStatus } from './generated'
 
 let instance: Client | null = null
@@ -72,6 +73,8 @@ const DashX = {
 
   // Analytics
   track(event: string, data?: any) { return ensureConfigured().track(event, data) },
+  startAutocapture(options?: AutocaptureOptions) { return ensureConfigured().startAutocapture(options) },
+  stopAutocapture() { return ensureConfigured().stopAutocapture() },
   trackMessage(params: Parameters<Client['trackMessage']>[0]) { return ensureConfigured().trackMessage(params) },
   trackAllMessages(params?: Parameters<Client['trackAllMessages']>[0]) { return ensureConfigured().trackAllMessages(params) },
 
@@ -170,6 +173,7 @@ export type {
   AiAgentStarterSuggestion,
   AiNotification,
   AssignedGroupSummary,
+  AutocaptureOptions,
   ChatConversationContext,
   ChatConversationSummary,
   ChatConversationTopic,

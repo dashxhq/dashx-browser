@@ -3,7 +3,11 @@ import { ApolloCache, ApolloClient, ApolloLink, HttpLink, InMemoryCache, gql } f
 import { SetContextLink } from '@apollo/client/link/context'
 import type { ObservableQuery } from '@apollo/client/core'
 
+import { startAutocapture } from './autocapture'
+import type { AutocaptureOptions } from './autocapture'
 import generateContext from './context'
+import EventQueue from './EventQueue'
+import type { PageContext, TrackedEventInput } from './EventQueue'
 import packageInfo from '../package.json'
 import SearchRecordsInputBuilder, { FetchRecordsOptions, SearchRecordsOptions } from './SearchRecordsInputBuilder'
 import WebSocketManager from './WebSocketManager'
@@ -60,6 +64,7 @@ import type {
 import { createLogger } from './logging'
 import { DEFAULT_BASE_URI, TRACK_MESSAGE_STATUS } from './constants'
 import { getItem, setItem } from './storage'
+import { endSession, touchSession } from './session'
 import type { DashXPushPayload } from './push-types'
 
 const UPLOAD_RETRY_LIMIT = 5
@@ -73,6 +78,15 @@ export const IN_APP_MESSAGES_PAGE_SIZE = 20
 const TrackAllMessagesDocument = gql`
   mutation TrackAllMessages($input: TrackAllMessagesInput!) {
     trackAllMessages(input: $input) {
+      success
+    }
+  }
+`
+// Hand-written for the same reason, and sent as a plain string because autocapture posts it with
+// `fetch(..., { keepalive })` so a batch flushed as the page unloads still arrives.
+const TRACK_EVENTS_MUTATION = `
+  mutation TrackEvents($input: TrackEventsInput!) {
+    trackEvents(input: $input) {
       success
     }
   }
@@ -103,7 +117,9 @@ type ClientParams = {
   publicKey: string,
   targetEnvironment: string,
   targetProduct?: string,
-  targetVersion?: string
+  targetVersion?: string,
+  // Opt-in: `true` captures page views and page leaves; requires an API with `trackEvents`.
+  autocapture?: boolean | AutocaptureOptions,
 }
 
 type IdentifyParams = Record<string, any>
@@ -466,6 +482,10 @@ class Client {
 
   context: SystemContextInput
 
+  #eventQueue: EventQueue | null = null
+
+  #stopAutocapture: (() => void) | null = null
+
   private logger = createLogger('CLIENT')
 
   constructor({
@@ -474,7 +494,8 @@ class Client {
     realtimeBaseUri = 'wss://realtime.dashx.com',
     targetEnvironment,
     targetProduct,
-    targetVersion
+    targetVersion,
+    autocapture,
   }: ClientParams) {
     this.baseUri = baseUri
     this.realtimeBaseUri = realtimeBaseUri
@@ -485,6 +506,10 @@ class Client {
     this.context = generateContext()
     this.loadIdentity()
     this.initGraphqlClient()
+
+    if (autocapture) {
+      this.startAutocapture(autocapture === true ? {} : autocapture)
+    }
   }
 
   get accountAnonymousUid(): string | null {
@@ -539,9 +564,7 @@ class Client {
     const authLink = new SetContextLink(({ headers }) => ({
       headers: {
         ...headers,
-        'X-Public-Key': this.publicKey,
-        'X-Target-Environment': this.targetEnvironment,
-        ...(this.#identityToken ? { 'X-Identity-Token': this.#identityToken } : {}),
+        ...this.#requestHeaders(),
       },
     }))
 
@@ -578,6 +601,14 @@ class Client {
         },
       },
     })
+  }
+
+  #requestHeaders(): Record<string, string> {
+    return {
+      'X-Public-Key': this.publicKey,
+      'X-Target-Environment': this.targetEnvironment,
+      ...(this.#identityToken ? { 'X-Identity-Token': this.#identityToken } : {}),
+    }
   }
 
   private loadIdentity() {
@@ -677,6 +708,7 @@ class Client {
     // direct `accountUid`/`identityToken` reset would leave the socket
     // authenticated and still receiving the previous visitor's chat events.
     this.setIdentity()
+    endSession()
     this.#foregroundMessageUnsubscribe?.()
     this.#foregroundMessageUnsubscribe = null
     this.#firebaseMessaging = null
@@ -695,6 +727,54 @@ class Client {
     }
 
     return this.graphqlClient.mutate({ mutation: TrackEventDocument, variables })
+  }
+
+  startAutocapture(options: AutocaptureOptions = {}): void {
+    if (typeof window === 'undefined') return
+
+    this.stopAutocapture()
+    this.#eventQueue ??= new EventQueue((events, sendOptions) => this.#sendTrackedEvents(events, sendOptions))
+    this.#stopAutocapture = startAutocapture(
+      options,
+      (event, data, page) => this.#enqueueTrackedEvent(event, data, page),
+      () => { void this.#eventQueue?.flush({ keepalive: true }) },
+    )
+  }
+
+  stopAutocapture(): void {
+    if (!this.#stopAutocapture) return
+
+    this.#stopAutocapture()
+    this.#stopAutocapture = null
+    void this.#eventQueue?.flush({ keepalive: true })
+  }
+
+  #enqueueTrackedEvent(event: string, data: Record<string, unknown>, page: PageContext): void {
+    this.#eventQueue?.enqueue({
+      event,
+      data,
+      accountUid: this.#accountUid,
+      accountAnonymousUid: this.#accountAnonymousUid,
+      timestamp: new Date().toISOString(),
+      systemContext: { ...this.context, page, sessionId: touchSession() },
+    })
+  }
+
+  async #sendTrackedEvents(events: TrackedEventInput[], { keepalive }: { keepalive: boolean }): Promise<void> {
+    try {
+      const response = await fetch(this.baseUri, {
+        method: 'POST',
+        keepalive,
+        headers: { 'Content-Type': 'application/json', ...this.#requestHeaders() },
+        body: JSON.stringify({ query: TRACK_EVENTS_MUTATION, variables: { input: { events } } }),
+      })
+      const body = await response.json().catch(() => null)
+      if (!response.ok || body?.errors) {
+        this.logger.error('Failed to track events:', body?.errors ?? response.status)
+      }
+    } catch (error) {
+      this.logger.error('Failed to track events:', error)
+    }
   }
 
   trackMessage({ id, status, timestamp }: TrackMessageParams) {
