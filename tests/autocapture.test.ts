@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { TITLE_SETTLE_MS } from '../src/autocapture'
 import Client from '../src/Client'
 import EventQueue, { FLUSH_INTERVAL_MS, MAX_BATCH_SIZE } from '../src/EventQueue'
-import type { TrackedEventInput } from '../src/EventQueue'
-import { SESSION_IDLE_TIMEOUT_MS, endSession, touchSession } from '../src/session'
+import type { QueuedEvent } from '../src/EventQueue'
+import { SESSION_IDLE_TIMEOUT_MS, campaignFromUrl, endSession, touchSession } from '../src/session'
 
-type SentRequest = { init: RequestInit, events: TrackedEventInput[] }
+type SentRequest = { init: RequestInit, events: QueuedEvent[] }
 
 let fetchMock: ReturnType<typeof vi.fn>
 let clients: Client[] = []
@@ -17,7 +18,7 @@ function sent(): SentRequest[] {
   }))
 }
 
-function sentEvents(): TrackedEventInput[] {
+function sentEvents(): QueuedEvent[] {
   return sent().flatMap((request) => request.events)
 }
 
@@ -28,7 +29,7 @@ function makeClient(autocapture: ConstructorParameters<typeof Client>[0]['autoca
 }
 
 async function flushTimers(): Promise<void> {
-  await vi.advanceTimersByTimeAsync(FLUSH_INTERVAL_MS)
+  await vi.advanceTimersByTimeAsync(TITLE_SETTLE_MS + FLUSH_INTERVAL_MS)
 }
 
 beforeEach(() => {
@@ -36,6 +37,7 @@ beforeEach(() => {
   window.localStorage.clear()
   endSession()
   window.history.replaceState(null, '', '/start')
+  document.title = ''
   fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: { trackEvents: { success: true } } }) })
   vi.stubGlobal('fetch', fetchMock)
 })
@@ -91,6 +93,54 @@ describe('autocapture', () => {
     expect(events[2].data).toMatchObject({ path: '/pricing', referrer: 'http://localhost:3000/start' })
   })
 
+  it('records the title the new route sets after the URL changes', async () => {
+    document.title = 'Start'
+    makeClient()
+    await vi.advanceTimersByTimeAsync(TITLE_SETTLE_MS)
+
+    window.history.pushState(null, '', '/pricing')
+    document.title = 'Pricing'
+    await flushTimers()
+
+    const views = sentEvents().filter((e) => e.event === '$pageview')
+    expect(views.map((e) => [ e.data.path, e.data.title ])).toEqual([ [ '/start', 'Start' ], [ '/pricing', 'Pricing' ] ])
+  })
+
+  it('captures a pending view before the next navigation leaves it', async () => {
+    makeClient()
+    window.history.pushState(null, '', '/pricing')
+    window.history.pushState(null, '', '/checkout')
+    await flushTimers()
+
+    expect(sentEvents().map((e) => `${e.event} ${e.data.path}`)).toEqual([
+      '$pageview /start',
+      '$pageleave /start',
+      '$pageview /pricing',
+      '$pageleave /pricing',
+      '$pageview /checkout',
+    ])
+  })
+
+  it('keeps the landing campaign for the rest of the session', async () => {
+    window.history.replaceState(null, '', '/start?utm_source=newsletter&utm_campaign=launch')
+    makeClient()
+    window.history.pushState(null, '', '/pricing')
+    await flushTimers()
+
+    const campaigns = sentEvents().map((e) => e.systemContext.campaign)
+    expect(campaigns).toHaveLength(3)
+    campaigns.forEach((campaign) => {
+      expect(campaign).toEqual({ name: 'launch', source: 'newsletter', medium: '', term: '', content: '' })
+    })
+  })
+
+  it('sends no campaign when the session did not land with one', async () => {
+    makeClient()
+    await flushTimers()
+
+    expect(sentEvents()[0].systemContext.campaign).toBeUndefined()
+  })
+
   it('treats query-string and anchor changes as the same page', async () => {
     makeClient()
     window.history.replaceState(null, '', '/start?page=2')
@@ -110,6 +160,7 @@ describe('autocapture', () => {
 
   it('records a leave and flushes with keepalive when the page is hidden away', async () => {
     makeClient()
+    await vi.advanceTimersByTimeAsync(TITLE_SETTLE_MS)
     window.dispatchEvent(new Event('pagehide'))
     await vi.advanceTimersByTimeAsync(0)
 
@@ -146,8 +197,22 @@ describe('autocapture', () => {
   })
 })
 
+describe('track', () => {
+  it('carries the page and the autocapture session', async () => {
+    const client = makeClient()
+    const mutate = vi.spyOn(client.graphqlClient, 'mutate').mockResolvedValue({ data: null })
+    await flushTimers()
+
+    client.track('Signed Up', { data: { plan: 'pro' } })
+
+    const context = mutate.mock.calls[0][0].variables.input.systemContext
+    expect(context.page).toMatchObject({ path: '/start', url: 'http://localhost:3000/start' })
+    expect(context.sessionId).toBe(sentEvents()[0].systemContext.sessionId)
+  })
+})
+
 describe('EventQueue', () => {
-  const event = (n: number) => ({ event: `e${n}` }) as TrackedEventInput
+  const event = (n: number) => ({ event: `e${n}` }) as QueuedEvent
 
   it('flushes as soon as a batch fills', () => {
     const send = vi.fn().mockResolvedValue(undefined)
@@ -171,6 +236,15 @@ describe('EventQueue', () => {
 
     expect(send).toHaveBeenCalledTimes(1)
     expect(send).toHaveBeenCalledWith([ event(1), event(2) ], { keepalive: true })
+  })
+})
+
+describe('campaignFromUrl', () => {
+  it('maps UTM parameters and leaves absent ones empty', () => {
+    expect(campaignFromUrl('https://example.com/?utm_medium=email&utm_term=shoes&utm_content=hero')).toEqual({
+      name: '', source: '', medium: 'email', term: 'shoes', content: 'hero',
+    })
+    expect(campaignFromUrl('https://example.com/?ref=twitter')).toBeNull()
   })
 })
 

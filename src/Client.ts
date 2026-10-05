@@ -1,13 +1,14 @@
 import uuid from 'uuid-random'
 import { ApolloCache, ApolloClient, ApolloLink, HttpLink, InMemoryCache, gql } from '@apollo/client/core'
 import { SetContextLink } from '@apollo/client/link/context'
+import { print } from 'graphql'
 import type { ObservableQuery } from '@apollo/client/core'
 
-import { startAutocapture } from './autocapture'
+import { pageContext, startAutocapture } from './autocapture'
 import type { AutocaptureOptions } from './autocapture'
 import generateContext from './context'
 import EventQueue from './EventQueue'
-import type { PageContext, TrackedEventInput } from './EventQueue'
+import type { PageContext, QueuedEvent } from './EventQueue'
 import packageInfo from '../package.json'
 import SearchRecordsInputBuilder, { FetchRecordsOptions, SearchRecordsOptions } from './SearchRecordsInputBuilder'
 import WebSocketManager from './WebSocketManager'
@@ -42,6 +43,7 @@ import {
   SummarizeInAppChatMessagesDocument,
   SummarizeInAppChatUnreadDocument,
   TrackEventDocument,
+  TrackEventsDocument,
   TrackMessageDocument,
   TransferCartDocument,
   UnsubscribeContactDocument,
@@ -64,7 +66,7 @@ import type {
 import { createLogger } from './logging'
 import { DEFAULT_BASE_URI, TRACK_MESSAGE_STATUS } from './constants'
 import { getItem, setItem } from './storage'
-import { endSession, touchSession } from './session'
+import { endSession, sessionCampaign, touchSession } from './session'
 import type { DashXPushPayload } from './push-types'
 
 const UPLOAD_RETRY_LIMIT = 5
@@ -82,15 +84,9 @@ const TrackAllMessagesDocument = gql`
     }
   }
 `
-// Hand-written for the same reason, and sent as a plain string because autocapture posts it with
-// `fetch(..., { keepalive })` so a batch flushed as the page unloads still arrives.
-const TRACK_EVENTS_MUTATION = `
-  mutation TrackEvents($input: TrackEventsInput!) {
-    trackEvents(input: $input) {
-      success
-    }
-  }
-`
+// Printed rather than sent through Apollo: batches go out with `fetch(..., { keepalive })` so one
+// flushed as the page unloads still arrives.
+const TRACK_EVENTS_QUERY = print(TrackEventsDocument)
 const UNIDENTIFIED_USER_ERROR = 'This operation can be performed only by an identified user. Ensure `dashx.identify` is run before calling this method.'
 
 // Terminal close-code band. When the server closes the socket with a code in
@@ -722,7 +718,9 @@ class Client {
         data,
         accountUid: this.#accountUid,
         accountAnonymousUid: this.#accountAnonymousUid,
-        systemContext: this.context,
+        systemContext: typeof window === 'undefined'
+          ? this.context
+          : this.#pageSystemContext(pageContext(document.referrer)),
       },
     }
 
@@ -756,17 +754,23 @@ class Client {
       accountUid: this.#accountUid,
       accountAnonymousUid: this.#accountAnonymousUid,
       timestamp: new Date().toISOString(),
-      systemContext: { ...this.context, page, sessionId: touchSession() },
+      systemContext: this.#pageSystemContext(page),
     })
   }
 
-  async #sendTrackedEvents(events: TrackedEventInput[], { keepalive }: { keepalive: boolean }): Promise<void> {
+  #pageSystemContext(page: PageContext): QueuedEvent['systemContext'] {
+    const sessionId = touchSession()
+    const campaign = sessionCampaign(sessionId, page.url)
+    return { ...this.context, page, sessionId, ...(campaign ? { campaign } : {}) }
+  }
+
+  async #sendTrackedEvents(events: QueuedEvent[], { keepalive }: { keepalive: boolean }): Promise<void> {
     try {
       const response = await fetch(this.baseUri, {
         method: 'POST',
         keepalive,
         headers: { 'Content-Type': 'application/json', ...this.#requestHeaders() },
-        body: JSON.stringify({ query: TRACK_EVENTS_MUTATION, variables: { input: { events } } }),
+        body: JSON.stringify({ query: TRACK_EVENTS_QUERY, variables: { input: { events } } }),
       })
       const body = await response.json().catch(() => null)
       if (!response.ok || body?.errors) {

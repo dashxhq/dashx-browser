@@ -37,7 +37,10 @@ function pageKey(location: Location): string {
   return location.pathname + (location.hash.startsWith('#/') ? location.hash : '')
 }
 
-function currentPage(referrer: string | null): PageContext {
+// Routers change the URL before rendering the route that sets its title.
+export const TITLE_SETTLE_MS = 300
+
+export function pageContext(referrer: string | null): PageContext {
   return {
     url: window.location.href,
     path: window.location.pathname,
@@ -50,19 +53,34 @@ export function startAutocapture(options: AutocaptureOptions, capture: Capture, 
   const pageviews = options.pageviews ?? true
   const pageleave = options.pageleave ?? true
 
-  let page = currentPage(document.referrer)
+  let page = pageContext(document.referrer)
   let key = pageKey(window.location)
   let enteredAt = Date.now()
   let hasLeft = false
+  let pendingView: ReturnType<typeof setTimeout> | null = null
+
+  // The title is read when the view is captured, after the new route has had time to set it.
+  const captureView = () => {
+    pendingView = null
+    page = { ...page, title: document.title || null }
+    if (pageviews) capture(PAGEVIEW_EVENT, { ...page }, page)
+  }
+
+  const flushPendingView = () => {
+    if (!pendingView) return
+    clearTimeout(pendingView)
+    captureView()
+  }
 
   const view = () => {
     enteredAt = Date.now()
     hasLeft = false
-    if (pageviews) capture(PAGEVIEW_EVENT, { ...page }, page)
+    pendingView = setTimeout(captureView, TITLE_SETTLE_MS)
   }
 
   // `pagehide` can fire more than once for a page restored from the back/forward cache.
   const leave = () => {
+    flushPendingView()
     if (!pageleave || hasLeft) return
     hasLeft = true
     capture(PAGELEAVE_EVENT, { ...page, durationMs: Date.now() - enteredAt }, page)
@@ -73,7 +91,7 @@ export function startAutocapture(options: AutocaptureOptions, capture: Capture, 
     if (nextKey === key) return
     leave()
     key = nextKey
-    page = currentPage(page.url)
+    page = pageContext(page.url)
     view()
   }
 
@@ -87,7 +105,10 @@ export function startAutocapture(options: AutocaptureOptions, capture: Capture, 
   }
 
   const onVisibilityChange = () => {
-    if (document.visibilityState === 'hidden') flush()
+    if (document.visibilityState === 'hidden') {
+      flushPendingView()
+      flush()
+    }
   }
 
   patchHistory()
@@ -101,6 +122,7 @@ export function startAutocapture(options: AutocaptureOptions, capture: Capture, 
   view()
 
   return () => {
+    flushPendingView()
     window.removeEventListener(LOCATION_CHANGE_EVENT, onLocationChange)
     window.removeEventListener('popstate', onLocationChange)
     window.removeEventListener('hashchange', onLocationChange)

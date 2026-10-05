@@ -86,6 +86,7 @@ export type ContactStubInput = {
 };
 
 export type ConversationChannel =
+  | 'CALL'
   | 'CHAT'
   | 'EMAIL'
   | 'IN_APP'
@@ -307,7 +308,9 @@ export type SystemContextInput = {
   location?: InputMaybe<SystemContextLocationInput>;
   network?: InputMaybe<SystemContextNetworkInput>;
   os?: InputMaybe<SystemContextOsInput>;
+  page?: InputMaybe<SystemContextPageInput>;
   screen?: InputMaybe<SystemContextScreenInput>;
+  sessionId?: InputMaybe<Scalars['String']['input']>;
   timeZone: Scalars['String']['input'];
   userAgent: Scalars['String']['input'];
 };
@@ -337,6 +340,13 @@ export type SystemContextOsInput = {
   version: Scalars['String']['input'];
 };
 
+export type SystemContextPageInput = {
+  path: Scalars['String']['input'];
+  referrer?: InputMaybe<Scalars['String']['input']>;
+  title?: InputMaybe<Scalars['String']['input']>;
+  url: Scalars['String']['input'];
+};
+
 export type SystemContextScreenInput = {
   density: Scalars['Float']['input'];
   height: Scalars['Int']['input'];
@@ -352,6 +362,10 @@ export type TrackEventInput = {
   timestamp?: InputMaybe<Scalars['Timestamp']['input']>;
 };
 
+export type TrackEventsInput = {
+  events: Array<TrackedEventInput>;
+};
+
 export type TrackMessageInput = {
   id: Scalars['UUID']['input'];
   status: TrackMessageStatus;
@@ -365,6 +379,15 @@ export type TrackMessageStatus =
   | 'OPENED'
   | 'READ'
   | 'UNREAD';
+
+export type TrackedEventInput = {
+  accountAnonymousUid?: InputMaybe<Scalars['String']['input']>;
+  accountUid?: InputMaybe<Scalars['String']['input']>;
+  data?: InputMaybe<Scalars['JSON']['input']>;
+  event: Scalars['String']['input'];
+  systemContext?: InputMaybe<SystemContextInput>;
+  timestamp?: InputMaybe<Scalars['Timestamp']['input']>;
+};
 
 export type TransferCartInput = {
   accountAnonymousUid: Scalars['String']['input'];
@@ -631,6 +654,13 @@ export type TrackEventMutationVariables = Exact<{
 
 export type TrackEventMutation = { __typename?: 'Mutation', trackEvent: { __typename?: 'TrackEventResponse', success: boolean } };
 
+export type TrackEventsMutationVariables = Exact<{
+  input: TrackEventsInput;
+}>;
+
+
+export type TrackEventsMutation = { __typename?: 'Mutation', trackEvents: { __typename?: 'TrackEventsResponse', success: boolean } };
+
 export type TrackMessageMutationVariables = Exact<{
   input: TrackMessageInput;
 }>;
@@ -691,6 +721,7 @@ export const SummarizeInAppChatConversationsDocument = {'kind':'Document','defin
 export const SummarizeInAppChatMessagesDocument = {'kind':'Document','definitions':[ {'kind':'OperationDefinition','operation':'query','name':{'kind':'Name','value':'SummarizeInAppChatMessages'},'variableDefinitions':[ {'kind':'VariableDefinition','variable':{'kind':'Variable','name':{'kind':'Name','value':'conversationId'}},'type':{'kind':'NonNullType','type':{'kind':'NamedType','name':{'kind':'Name','value':'UUID'}}}} ],'selectionSet':{'kind':'SelectionSet','selections':[ {'kind':'Field','name':{'kind':'Name','value':'summarizeInAppChatMessages'},'arguments':[ {'kind':'Argument','name':{'kind':'Name','value':'input'},'value':{'kind':'ObjectValue','fields':[ {'kind':'ObjectField','name':{'kind':'Name','value':'conversationId'},'value':{'kind':'Variable','name':{'kind':'Name','value':'conversationId'}}} ]}} ],'selectionSet':{'kind':'SelectionSet','selections':[ {'kind':'Field','name':{'kind':'Name','value':'count'}} ]}} ]}} ]} as unknown as DocumentNode<SummarizeInAppChatMessagesQuery, SummarizeInAppChatMessagesQueryVariables>
 export const SummarizeInAppChatUnreadDocument = {'kind':'Document','definitions':[ {'kind':'OperationDefinition','operation':'query','name':{'kind':'Name','value':'SummarizeInAppChatUnread'},'variableDefinitions':[ {'kind':'VariableDefinition','variable':{'kind':'Variable','name':{'kind':'Name','value':'identityId'}},'type':{'kind':'NonNullType','type':{'kind':'NamedType','name':{'kind':'Name','value':'UUID'}}}} ],'selectionSet':{'kind':'SelectionSet','selections':[ {'kind':'Field','name':{'kind':'Name','value':'summarizeInAppChatUnread'},'arguments':[ {'kind':'Argument','name':{'kind':'Name','value':'input'},'value':{'kind':'ObjectValue','fields':[ {'kind':'ObjectField','name':{'kind':'Name','value':'identityId'},'value':{'kind':'Variable','name':{'kind':'Name','value':'identityId'}}} ]}} ],'selectionSet':{'kind':'SelectionSet','selections':[ {'kind':'Field','name':{'kind':'Name','value':'count'}} ]}} ]}} ]} as unknown as DocumentNode<SummarizeInAppChatUnreadQuery, SummarizeInAppChatUnreadQueryVariables>
 export const TrackEventDocument = {'kind':'Document','definitions':[ {'kind':'OperationDefinition','operation':'mutation','name':{'kind':'Name','value':'TrackEvent'},'variableDefinitions':[ {'kind':'VariableDefinition','variable':{'kind':'Variable','name':{'kind':'Name','value':'input'}},'type':{'kind':'NonNullType','type':{'kind':'NamedType','name':{'kind':'Name','value':'TrackEventInput'}}}} ],'selectionSet':{'kind':'SelectionSet','selections':[ {'kind':'Field','name':{'kind':'Name','value':'trackEvent'},'arguments':[ {'kind':'Argument','name':{'kind':'Name','value':'input'},'value':{'kind':'Variable','name':{'kind':'Name','value':'input'}}} ],'selectionSet':{'kind':'SelectionSet','selections':[ {'kind':'Field','name':{'kind':'Name','value':'success'}} ]}} ]}} ]} as unknown as DocumentNode<TrackEventMutation, TrackEventMutationVariables>
+export const TrackEventsDocument = {'kind':'Document','definitions':[ {'kind':'OperationDefinition','operation':'mutation','name':{'kind':'Name','value':'TrackEvents'},'variableDefinitions':[ {'kind':'VariableDefinition','variable':{'kind':'Variable','name':{'kind':'Name','value':'input'}},'type':{'kind':'NonNullType','type':{'kind':'NamedType','name':{'kind':'Name','value':'TrackEventsInput'}}}} ],'selectionSet':{'kind':'SelectionSet','selections':[ {'kind':'Field','name':{'kind':'Name','value':'trackEvents'},'arguments':[ {'kind':'Argument','name':{'kind':'Name','value':'input'},'value':{'kind':'Variable','name':{'kind':'Name','value':'input'}}} ],'selectionSet':{'kind':'SelectionSet','selections':[ {'kind':'Field','name':{'kind':'Name','value':'success'}} ]}} ]}} ]} as unknown as DocumentNode<TrackEventsMutation, TrackEventsMutationVariables>
 export const TrackMessageDocument = {'kind':'Document','definitions':[ {'kind':'OperationDefinition','operation':'mutation','name':{'kind':'Name','value':'TrackMessage'},'variableDefinitions':[ {'kind':'VariableDefinition','variable':{'kind':'Variable','name':{'kind':'Name','value':'input'}},'type':{'kind':'NonNullType','type':{'kind':'NamedType','name':{'kind':'Name','value':'TrackMessageInput'}}}} ],'selectionSet':{'kind':'SelectionSet','selections':[ {'kind':'Field','name':{'kind':'Name','value':'trackMessage'},'arguments':[ {'kind':'Argument','name':{'kind':'Name','value':'input'},'value':{'kind':'Variable','name':{'kind':'Name','value':'input'}}} ],'selectionSet':{'kind':'SelectionSet','selections':[ {'kind':'Field','name':{'kind':'Name','value':'success'}} ]}} ]}} ]} as unknown as DocumentNode<TrackMessageMutation, TrackMessageMutationVariables>
 export const TransferCartDocument = {'kind':'Document','definitions':[ {'kind':'OperationDefinition','operation':'mutation','name':{'kind':'Name','value':'TransferCart'},'variableDefinitions':[ {'kind':'VariableDefinition','variable':{'kind':'Variable','name':{'kind':'Name','value':'input'}},'type':{'kind':'NonNullType','type':{'kind':'NamedType','name':{'kind':'Name','value':'TransferCartInput'}}}} ],'selectionSet':{'kind':'SelectionSet','selections':[ {'kind':'Field','name':{'kind':'Name','value':'transferCart'},'arguments':[ {'kind':'Argument','name':{'kind':'Name','value':'input'},'value':{'kind':'Variable','name':{'kind':'Name','value':'input'}}} ],'selectionSet':{'kind':'SelectionSet','selections':[ {'kind':'FragmentSpread','name':{'kind':'Name','value':'CartFragment'}} ]}} ]}},{'kind':'FragmentDefinition','name':{'kind':'Name','value':'ItemFragment'},'typeCondition':{'kind':'NamedType','name':{'kind':'Name','value':'Item'}},'selectionSet':{'kind':'SelectionSet','selections':[ {'kind':'Field','name':{'kind':'Name','value':'id'}},{'kind':'Field','name':{'kind':'Name','value':'name'}},{'kind':'Field','name':{'kind':'Name','value':'identifier'}},{'kind':'Field','name':{'kind':'Name','value':'description'}},{'kind':'Field','name':{'kind':'Name','value':'createdAt'}},{'kind':'Field','name':{'kind':'Name','value':'updatedAt'}},{'kind':'Field','name':{'kind':'Name','value':'pricings'},'selectionSet':{'kind':'SelectionSet','selections':[ {'kind':'Field','name':{'kind':'Name','value':'id'}},{'kind':'Field','name':{'kind':'Name','value':'kind'}},{'kind':'Field','name':{'kind':'Name','value':'amount'}},{'kind':'Field','name':{'kind':'Name','value':'originalAmount'}},{'kind':'Field','name':{'kind':'Name','value':'isRecurring'}},{'kind':'Field','name':{'kind':'Name','value':'recurringInterval'}},{'kind':'Field','name':{'kind':'Name','value':'recurringIntervalUnit'}},{'kind':'Field','name':{'kind':'Name','value':'appleProductIdentifier'}},{'kind':'Field','name':{'kind':'Name','value':'googleProductIdentifier'}},{'kind':'Field','name':{'kind':'Name','value':'currencyCode'}},{'kind':'Field','name':{'kind':'Name','value':'createdAt'}},{'kind':'Field','name':{'kind':'Name','value':'updatedAt'}} ]}} ]}},{'kind':'FragmentDefinition','name':{'kind':'Name','value':'CartFragment'},'typeCondition':{'kind':'NamedType','name':{'kind':'Name','value':'Order'}},'selectionSet':{'kind':'SelectionSet','selections':[ {'kind':'Field','name':{'kind':'Name','value':'id'}},{'kind':'Field','name':{'kind':'Name','value':'status'}},{'kind':'Field','name':{'kind':'Name','value':'subtotal'}},{'kind':'Field','name':{'kind':'Name','value':'discount'}},{'kind':'Field','name':{'kind':'Name','value':'tax'}},{'kind':'Field','name':{'kind':'Name','value':'total'}},{'kind':'Field','name':{'kind':'Name','value':'gatewayMeta'}},{'kind':'Field','name':{'kind':'Name','value':'currencyCode'}},{'kind':'Field','name':{'kind':'Name','value':'orderItems'},'selectionSet':{'kind':'SelectionSet','selections':[ {'kind':'Field','name':{'kind':'Name','value':'id'}},{'kind':'Field','name':{'kind':'Name','value':'quantity'}},{'kind':'Field','name':{'kind':'Name','value':'unitPrice'}},{'kind':'Field','name':{'kind':'Name','value':'subtotal'}},{'kind':'Field','name':{'kind':'Name','value':'discount'}},{'kind':'Field','name':{'kind':'Name','value':'tax'}},{'kind':'Field','name':{'kind':'Name','value':'total'}},{'kind':'Field','name':{'kind':'Name','value':'custom'}},{'kind':'Field','name':{'kind':'Name','value':'currencyCode'}},{'kind':'Field','name':{'kind':'Name','value':'item'},'selectionSet':{'kind':'SelectionSet','selections':[ {'kind':'FragmentSpread','name':{'kind':'Name','value':'ItemFragment'}} ]}} ]}},{'kind':'Field','name':{'kind':'Name','value':'couponRedemptions'},'selectionSet':{'kind':'SelectionSet','selections':[ {'kind':'Field','name':{'kind':'Name','value':'coupon'},'selectionSet':{'kind':'SelectionSet','selections':[ {'kind':'Field','name':{'kind':'Name','value':'name'}},{'kind':'Field','name':{'kind':'Name','value':'identifier'}},{'kind':'Field','name':{'kind':'Name','value':'discountType'}},{'kind':'Field','name':{'kind':'Name','value':'discountAmount'}},{'kind':'Field','name':{'kind':'Name','value':'currencyCode'}},{'kind':'Field','name':{'kind':'Name','value':'expiresAt'}} ]}} ]}} ]}} ]} as unknown as DocumentNode<TransferCartMutation, TransferCartMutationVariables>
 export const UnsubscribeContactDocument = {'kind':'Document','definitions':[ {'kind':'OperationDefinition','operation':'mutation','name':{'kind':'Name','value':'UnsubscribeContact'},'variableDefinitions':[ {'kind':'VariableDefinition','variable':{'kind':'Variable','name':{'kind':'Name','value':'input'}},'type':{'kind':'NonNullType','type':{'kind':'NamedType','name':{'kind':'Name','value':'UnsubscribeContactInput'}}}} ],'selectionSet':{'kind':'SelectionSet','selections':[ {'kind':'Field','name':{'kind':'Name','value':'unsubscribeContact'},'arguments':[ {'kind':'Argument','name':{'kind':'Name','value':'input'},'value':{'kind':'Variable','name':{'kind':'Name','value':'input'}}} ],'selectionSet':{'kind':'SelectionSet','selections':[ {'kind':'Field','name':{'kind':'Name','value':'success'}} ]}} ]}} ]} as unknown as DocumentNode<UnsubscribeContactMutation, UnsubscribeContactMutationVariables>
