@@ -74,7 +74,7 @@ Events are sent in batches every 5 seconds or 20 events, and the last batch is f
 
 #### Sessions and campaigns
 
-Every event, autocaptured or sent with `DashX.track()`, carries `systemContext.page` and a `systemContext.sessionId`. A session ends after 30 minutes without a tracked event, and on `DashX.reset()`. It is shared across tabs of the same site.
+Every event sent from the browser, autocaptured or with `DashX.track()`, carries `systemContext.page` and a `systemContext.sessionId`. A session ends after 30 minutes without a tracked event, and on `DashX.reset()`. It is shared across tabs of the same site.
 
 `utm_source`, `utm_medium`, `utm_campaign`, `utm_term` and `utm_content` on the landing URL fill `systemContext.campaign` for every event in that session, including after client-side navigation drops them from the URL.
 
@@ -97,7 +97,7 @@ DashX.configure({
 })
 ```
 
-`beforeSend` also accepts an array of functions, run in order; the first to return `null` drops the event. It applies to `DashX.track()` too, where a dropped call resolves to `undefined`.
+`beforeSend` also accepts an array of functions, run in order; the first to return `null` drops the event, and a function that throws drops it too. It applies to `DashX.track()` too, where a dropped call resolves to `undefined`.
 
 ## Contributing
 

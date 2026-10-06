@@ -267,6 +267,18 @@ describe('privacy', () => {
     expect(events.every((e) => e.data.url === 'redacted')).toBe(true)
   })
 
+  it('drops the event, without throwing, when beforeSend throws', async () => {
+    const client = makeClient(true, { beforeSend: () => { throw new Error('hook bug') } })
+    const mutate = vi.spyOn(client.graphqlClient, 'mutate').mockResolvedValue({ data: null })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await expect(client.track('Signed Up')).resolves.toBeUndefined()
+    await flushTimers()
+
+    expect(mutate).not.toHaveBeenCalled()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('lets beforeSend drop a track() call before it is sent', async () => {
     const client = makeClient(false, { beforeSend: (event) => (event.event === 'Secret' ? null : event) })
     const mutate = vi.spyOn(client.graphqlClient, 'mutate').mockResolvedValue({ data: null })
@@ -279,9 +291,19 @@ describe('privacy', () => {
 })
 
 describe('maskQueryParams', () => {
-  it('masks only exact names and leaves the rest of the url untouched', () => {
-    expect(maskQueryParams('https://a.test/p%20q?xgclid=1&gclid=2&q=a+b#/route?gclid=3', [ 'gclid' ]))
-      .toBe(`https://a.test/p%20q?xgclid=1&gclid=${MASKED}&q=a+b#/route?gclid=3`)
+  it('masks only whole names and leaves the rest of the url untouched', () => {
+    expect(maskQueryParams('https://a.test/p%20q?xgclid=1&gclid=2&q=a+b#top', [ 'gclid' ]))
+      .toBe(`https://a.test/p%20q?xgclid=1&gclid=${MASKED}&q=a+b#top`)
+  })
+
+  it('masks the query of a hash-router route too', () => {
+    expect(maskQueryParams('https://a.test/#/landing?gclid=1&plan=pro', [ 'gclid' ]))
+      .toBe(`https://a.test/#/landing?gclid=${MASKED}&plan=pro`)
+  })
+
+  it('matches names case-insensitively', () => {
+    expect(maskQueryParams('https://a.test/?GCLID=1&Email=a@b.test', [ 'gclid', 'email' ]))
+      .toBe(`https://a.test/?GCLID=${MASKED}&Email=${MASKED}`)
   })
 })
 

@@ -10,7 +10,7 @@
 
 - **UTM campaign attribution.** `utm_source`, `utm_medium`, `utm_campaign`, `utm_term` and `utm_content` on the landing URL fill `systemContext.campaign` for every event in that session, including after client-side navigation drops them from the URL.
 
-- **Privacy controls for tracked events.** URLs and referrers are still sent in full by default. `maskPersonalDataProperties: true` replaces the values of ad-click ids (`gclid`, `fbclid`, `msclkid` and similar) in captured URLs and referrers with `<masked>`, and `customPersonalDataProperties` adds your own query parameters to that list. `beforeSend` (a function or an array of them) runs on every event from `track()` and autocapture before it is sent; return the event, edited as needed, or `null` to drop it. A dropped `track()` call resolves to `undefined`.
+- **Privacy controls for tracked events.** URLs and referrers are still sent in full by default. `maskPersonalDataProperties: true` replaces the values of ad-click ids (`gclid`, `fbclid`, `msclkid` and similar) in captured URLs and referrers with `<masked>`, and `customPersonalDataProperties` adds your own query parameters to that list. `beforeSend` (a function or an array of them) runs on every event from `track()` and autocapture before it is sent; return the event, edited as needed, or `null` to drop it. A hook that throws drops the event and logs the error. A dropped `track()` call resolves to `undefined`.
 
 ### Changed
 
@@ -33,6 +33,8 @@
 ### Fixed
 
 - **`screen.density` is no longer rounded.** The schema now types it as `Float`, so `generateContext` sends `devicePixelRatio` as the browser reports it (1.25, 1.5, 2.625, …) instead of collapsing every scaled display and zoomed browser onto the nearest integer. `screen.height` and `screen.width` stay `Int` and are still rounded, and a non-finite ratio still falls back to `1`.
+
+  Requires an API that types `SystemContextScreenInput.density` as `Float`; against an older `Int` server a fractional density fails variable coercion for the whole request.
 
 ## 0.11.0
 
