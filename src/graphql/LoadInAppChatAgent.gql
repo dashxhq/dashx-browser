@@ -1,0 +1,10 @@
+query LoadInAppChatAgent($identityId: UUID!) {
+  loadInAppChatAgent(input: { identityId: $identityId }) {
+    id
+    name
+    avatar
+    starterMessages
+    starterSuggestions
+    showStarterSuggestionLabel
+  }
+}
