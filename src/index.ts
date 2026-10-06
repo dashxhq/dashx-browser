@@ -54,6 +54,7 @@ function ensureConfigured(): Client {
 
 const DashX = {
   configure(params: ClientParams): Client {
+    instance?.stopAutocapture()
     instance = new Client(params)
     return instance
   },

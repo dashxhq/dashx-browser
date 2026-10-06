@@ -44,7 +44,6 @@ import {
   SummarizeInAppChatConversationsDocument,
   SummarizeInAppChatMessagesDocument,
   SummarizeInAppChatUnreadDocument,
-  TrackEventDocument,
   TrackEventsDocument,
   TrackMessageDocument,
   TransferCartDocument,
@@ -89,6 +88,8 @@ const TrackAllMessagesDocument = gql`
 // Printed rather than sent through Apollo: batches go out with `fetch(..., { keepalive })` so one
 // flushed as the page unloads still arrives.
 const TRACK_EVENTS_QUERY = print(TrackEventsDocument)
+// Browsers reject a keepalive request whose body would push in-flight keepalive bodies past 64KB.
+const KEEPALIVE_MAX_BYTES = 60 * 1024
 const UNIDENTIFIED_USER_ERROR = 'This operation can be performed only by an identified user. Ensure `dashx.identify` is run before calling this method.'
 
 // Terminal close-code band. When the server closes the socket with a code in
@@ -730,27 +731,32 @@ class Client {
     setItem('fcmToken', null)
   }
 
-  track(event: string, data?: Pick<TrackEventInput, 'data'>) {
-    const input = runBeforeSend({
+  // Resolves once the event has been sent; failures are logged, never thrown.
+  track(event: string, data?: Pick<TrackEventInput, 'data'>): Promise<void> {
+    const queued = runBeforeSend<QueuedEvent>({
       event,
-      data,
+      data: data as QueuedEvent['data'],
       accountUid: this.#accountUid,
       accountAnonymousUid: this.#accountAnonymousUid,
+      timestamp: new Date().toISOString(),
       systemContext: typeof window === 'undefined'
         ? this.context
         : this.#pageSystemContext(pageContext(document.referrer, this.#maskUrl)),
     }, this.#beforeSend)
 
-    if (!input) return Promise.resolve(undefined)
+    if (!queued) return Promise.resolve()
 
-    return this.graphqlClient.mutate({ mutation: TrackEventDocument, variables: { input } })
+    const queue = this.#ensureEventQueue()
+    queue.enqueue(queued)
+    // Sent now, not on the batch timer, so an event tracked just before a navigation still arrives.
+    return queue.flush({ keepalive: true })
   }
 
   startAutocapture(options: AutocaptureOptions = {}): void {
     if (typeof window === 'undefined') return
 
     this.stopAutocapture()
-    this.#eventQueue ??= new EventQueue((events, sendOptions) => this.#sendTrackedEvents(events, sendOptions))
+    this.#ensureEventQueue()
     this.#stopAutocapture = startAutocapture(
       options,
       (event, data, page) => this.#enqueueTrackedEvent(event, data, page),
@@ -765,6 +771,11 @@ class Client {
     this.#stopAutocapture()
     this.#stopAutocapture = null
     void this.#eventQueue?.flush({ keepalive: true })
+  }
+
+  #ensureEventQueue(): EventQueue {
+    this.#eventQueue ??= new EventQueue((events, sendOptions) => this.#sendTrackedEvents(events, sendOptions))
+    return this.#eventQueue
   }
 
   #enqueueTrackedEvent(event: string, data: Record<string, unknown>, page: PageContext): void {
@@ -790,11 +801,12 @@ class Client {
 
   async #sendTrackedEvents(events: QueuedEvent[], { keepalive }: { keepalive: boolean }): Promise<void> {
     try {
+      const payload = JSON.stringify({ query: TRACK_EVENTS_QUERY, variables: { input: { events } } })
       const response = await fetch(this.baseUri, {
         method: 'POST',
-        keepalive,
+        keepalive: keepalive && new TextEncoder().encode(payload).length <= KEEPALIVE_MAX_BYTES,
         headers: { 'Content-Type': 'application/json', ...this.#requestHeaders() },
-        body: JSON.stringify({ query: TRACK_EVENTS_QUERY, variables: { input: { events } } }),
+        body: payload,
       })
       const body = await response.json().catch(() => null)
       if (!response.ok || body?.errors) {

@@ -128,8 +128,11 @@ export function startAutocapture(
 
   view()
 
+  // A view still waiting for its title is dropped: a stop and restart inside that wait (StrictMode,
+  // a remount) would otherwise record the page twice.
   return () => {
-    flushPendingView()
+    if (pendingView) clearTimeout(pendingView)
+    pendingView = null
     window.removeEventListener(LOCATION_CHANGE_EVENT, onLocationChange)
     window.removeEventListener('popstate', onLocationChange)
     window.removeEventListener('hashchange', onLocationChange)

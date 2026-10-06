@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { TITLE_SETTLE_MS } from '../src/autocapture'
 import Client from '../src/Client'
+import DashX from '../src/index'
 import EventQueue, { FLUSH_INTERVAL_MS, MAX_BATCH_SIZE } from '../src/EventQueue'
 import type { QueuedEvent } from '../src/EventQueue'
 import { MASKED, maskQueryParams } from '../src/privacy'
@@ -180,6 +181,25 @@ describe('autocapture', () => {
     expect(sentEvents().map((e) => e.event)).toEqual([ '$pageview', '$pageview' ])
   })
 
+  it('records the page once when stopped and restarted before its view settles', async () => {
+    const client = makeClient()
+    client.stopAutocapture()
+    client.startAutocapture()
+    await flushTimers()
+
+    expect(sentEvents().map((e) => e.event)).toEqual([ '$pageview' ])
+  })
+
+  it('stops the previous client when configure is called again', async () => {
+    clients.push(DashX.configure({ publicKey: 'pk_test', targetEnvironment: 'test', autocapture: true }))
+    clients.push(DashX.configure({ publicKey: 'pk_test', targetEnvironment: 'test', autocapture: true }))
+    await vi.advanceTimersByTimeAsync(TITLE_SETTLE_MS)
+    window.history.pushState(null, '', '/pricing')
+    await flushTimers()
+
+    expect(sentEvents().map((e) => e.event)).toEqual([ '$pageview', '$pageleave', '$pageview' ])
+  })
+
   it('stops listening after stopAutocapture', async () => {
     const client = makeClient()
     client.stopAutocapture()
@@ -203,14 +223,50 @@ describe('autocapture', () => {
 describe('track', () => {
   it('carries the page and the autocapture session', async () => {
     const client = makeClient()
-    const mutate = vi.spyOn(client.graphqlClient, 'mutate').mockResolvedValue({ data: null })
     await flushTimers()
+    const { sessionId } = sentEvents()[0].systemContext
 
-    client.track('Signed Up', { data: { plan: 'pro' } })
+    await client.track('Signed Up', { data: { plan: 'pro' } })
 
-    const context = mutate.mock.calls[0][0].variables.input.systemContext
-    expect(context.page).toMatchObject({ path: '/start', url: 'http://localhost:3000/start' })
-    expect(context.sessionId).toBe(sentEvents()[0].systemContext.sessionId)
+    const tracked = sentEvents()[1]
+    expect(tracked.event).toBe('Signed Up')
+    expect(tracked.systemContext.page).toMatchObject({ path: '/start', url: 'http://localhost:3000/start' })
+    expect(tracked.systemContext.sessionId).toBe(sessionId)
+  })
+
+  it('sends at once with keepalive, taking queued autocaptured events along', async () => {
+    const client = makeClient()
+    await vi.advanceTimersByTimeAsync(TITLE_SETTLE_MS)
+
+    await client.track('Signed Up')
+
+    const [ request ] = sent()
+    expect(request.init.keepalive).toBe(true)
+    expect(request.events.map((e) => e.event)).toEqual([ '$pageview', 'Signed Up' ])
+  })
+
+  it('works without autocapture', async () => {
+    const client = makeClient(false)
+
+    await client.track('Signed Up')
+
+    expect(sentEvents().map((e) => e.event)).toEqual([ 'Signed Up' ])
+  })
+
+  it('resolves rather than rejecting when the send fails', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const client = makeClient(false)
+
+    await expect(client.track('Signed Up')).resolves.toBeUndefined()
+  })
+
+  it('drops keepalive when the payload is too large for it', async () => {
+    const client = makeClient(false)
+
+    await client.track('Upload', { blob: 'x'.repeat(70 * 1024) } as never)
+
+    expect(sent()[0].init.keepalive).toBe(false)
   })
 })
 
@@ -269,24 +325,21 @@ describe('privacy', () => {
 
   it('drops the event, without throwing, when beforeSend throws', async () => {
     const client = makeClient(true, { beforeSend: () => { throw new Error('hook bug') } })
-    const mutate = vi.spyOn(client.graphqlClient, 'mutate').mockResolvedValue({ data: null })
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
     await expect(client.track('Signed Up')).resolves.toBeUndefined()
     await flushTimers()
 
-    expect(mutate).not.toHaveBeenCalled()
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('lets beforeSend drop a track() call before it is sent', async () => {
     const client = makeClient(false, { beforeSend: (event) => (event.event === 'Secret' ? null : event) })
-    const mutate = vi.spyOn(client.graphqlClient, 'mutate').mockResolvedValue({ data: null })
 
     await expect(client.track('Secret')).resolves.toBeUndefined()
-    client.track('Signed Up')
+    await client.track('Signed Up')
 
-    expect(mutate.mock.calls.map(([ options ]) => options.variables?.input.event)).toEqual([ 'Signed Up' ])
+    expect(sentEvents().map((e) => e.event)).toEqual([ 'Signed Up' ])
   })
 })
 

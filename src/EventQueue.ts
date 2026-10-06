@@ -11,9 +11,9 @@ export type QueuedEvent = {
   event: string,
   accountUid: string | null,
   accountAnonymousUid: string | null,
-  data: Record<string, unknown>,
+  data?: Record<string, unknown>,
   timestamp: string,
-  systemContext: SystemContextInput & { page: PageContext, sessionId: string },
+  systemContext: SystemContextInput,
 }
 
 export type SendEvents = (_events: QueuedEvent[], _options: { keepalive: boolean }) => Promise<void>
