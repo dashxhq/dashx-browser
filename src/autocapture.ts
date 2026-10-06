@@ -7,6 +7,13 @@ export type AutocaptureOptions = {
 
 export type Capture = (_event: string, _data: Record<string, unknown>, _page: PageContext) => void
 
+export type RunningAutocapture = {
+  stop: () => void,
+  // The page as autocapture records it: after client-side navigation the referrer is the previous
+  // route, which `document.referrer` never reflects.
+  currentPage: () => PageContext,
+}
+
 export const PAGEVIEW_EVENT = '$pageview'
 
 export const PAGELEAVE_EVENT = '$pageleave'
@@ -56,7 +63,7 @@ export function startAutocapture(
   capture: Capture,
   flush: () => void,
   maskUrl: (_url: string) => string = keepUrl,
-): () => void {
+): RunningAutocapture {
   const pageviews = options.pageviews ?? true
   const pageleave = options.pageleave ?? true
 
@@ -128,16 +135,19 @@ export function startAutocapture(
 
   view()
 
-  // A view still waiting for its title is dropped: a stop and restart inside that wait (StrictMode,
-  // a remount) would otherwise record the page twice.
-  return () => {
-    if (pendingView) clearTimeout(pendingView)
-    pendingView = null
-    window.removeEventListener(LOCATION_CHANGE_EVENT, onLocationChange)
-    window.removeEventListener('popstate', onLocationChange)
-    window.removeEventListener('hashchange', onLocationChange)
-    window.removeEventListener('pagehide', onPageHide)
-    window.removeEventListener('pageshow', onPageShow)
-    document.removeEventListener('visibilitychange', onVisibilityChange)
+  return {
+    // A view still waiting for its title is dropped: a stop and restart inside that wait
+    // (StrictMode, a remount) would otherwise record the page twice.
+    stop: () => {
+      if (pendingView) clearTimeout(pendingView)
+      pendingView = null
+      window.removeEventListener(LOCATION_CHANGE_EVENT, onLocationChange)
+      window.removeEventListener('popstate', onLocationChange)
+      window.removeEventListener('hashchange', onLocationChange)
+      window.removeEventListener('pagehide', onPageHide)
+      window.removeEventListener('pageshow', onPageShow)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    },
+    currentPage: () => ({ ...page, title: document.title || null }),
   }
 }

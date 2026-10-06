@@ -245,6 +245,20 @@ describe('track', () => {
     expect(request.events.map((e) => e.event)).toEqual([ '$pageview', 'Signed Up' ])
   })
 
+  it('reports the same page and referrer as the page view after client-side navigation', async () => {
+    const client = makeClient()
+    window.history.pushState(null, '', '/pricing')
+    document.title = 'Pricing'
+    await vi.advanceTimersByTimeAsync(TITLE_SETTLE_MS)
+
+    await client.track('Clicked Buy')
+
+    const view = sentEvents().find((e) => e.event === '$pageview' && e.data?.path === '/pricing')
+    const tracked = sentEvents().find((e) => e.event === 'Clicked Buy')
+    expect(tracked?.systemContext.page).toEqual(view?.systemContext.page)
+    expect(tracked?.systemContext.page?.referrer).toBe('http://localhost:3000/start')
+  })
+
   it('works without autocapture', async () => {
     const client = makeClient(false)
 

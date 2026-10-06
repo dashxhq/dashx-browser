@@ -5,7 +5,7 @@ import { print } from 'graphql'
 import type { ObservableQuery } from '@apollo/client/core'
 
 import { pageContext, startAutocapture } from './autocapture'
-import type { AutocaptureOptions } from './autocapture'
+import type { AutocaptureOptions, RunningAutocapture } from './autocapture'
 import generateContext from './context'
 import EventQueue from './EventQueue'
 import type { PageContext, QueuedEvent } from './EventQueue'
@@ -489,7 +489,7 @@ class Client {
 
   #eventQueue: EventQueue | null = null
 
-  #stopAutocapture: (() => void) | null = null
+  #autocapture: RunningAutocapture | null = null
 
   #maskedUrlParams: string[]
 
@@ -741,7 +741,7 @@ class Client {
       timestamp: new Date().toISOString(),
       systemContext: typeof window === 'undefined'
         ? this.context
-        : this.#pageSystemContext(pageContext(document.referrer, this.#maskUrl)),
+        : this.#pageSystemContext(this.#autocapture?.currentPage() ?? pageContext(document.referrer, this.#maskUrl)),
     }, this.#beforeSend)
 
     if (!queued) return Promise.resolve()
@@ -757,7 +757,7 @@ class Client {
 
     this.stopAutocapture()
     this.#ensureEventQueue()
-    this.#stopAutocapture = startAutocapture(
+    this.#autocapture = startAutocapture(
       options,
       (event, data, page) => this.#enqueueTrackedEvent(event, data, page),
       () => { void this.#eventQueue?.flush({ keepalive: true }) },
@@ -766,10 +766,10 @@ class Client {
   }
 
   stopAutocapture(): void {
-    if (!this.#stopAutocapture) return
+    if (!this.#autocapture) return
 
-    this.#stopAutocapture()
-    this.#stopAutocapture = null
+    this.#autocapture.stop()
+    this.#autocapture = null
     void this.#eventQueue?.flush({ keepalive: true })
   }
 
