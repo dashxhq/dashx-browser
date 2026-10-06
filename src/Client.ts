@@ -9,6 +9,8 @@ import type { AutocaptureOptions } from './autocapture'
 import generateContext from './context'
 import EventQueue from './EventQueue'
 import type { PageContext, QueuedEvent } from './EventQueue'
+import { PERSONAL_DATA_URL_PARAMS, maskQueryParams, runBeforeSend } from './privacy'
+import type { BeforeSend } from './privacy'
 import packageInfo from '../package.json'
 import SearchRecordsInputBuilder, { FetchRecordsOptions, SearchRecordsOptions } from './SearchRecordsInputBuilder'
 import WebSocketManager from './WebSocketManager'
@@ -116,6 +118,12 @@ type ClientParams = {
   targetVersion?: string,
   // Opt-in: `true` captures page views and page leaves; requires an API with `trackEvents`.
   autocapture?: boolean | AutocaptureOptions,
+  // Masks ad-click ids (`gclid`, `fbclid`, ...) in captured URLs and referrers.
+  maskPersonalDataProperties?: boolean,
+  // Extra query parameters masked alongside them; ignored unless `maskPersonalDataProperties`.
+  customPersonalDataProperties?: string[],
+  // Runs on every tracked event before it is sent; return `null` to drop the event.
+  beforeSend?: BeforeSend | BeforeSend[],
 }
 
 type IdentifyParams = Record<string, any>
@@ -482,6 +490,10 @@ class Client {
 
   #stopAutocapture: (() => void) | null = null
 
+  #maskedUrlParams: string[]
+
+  #beforeSend: BeforeSend | BeforeSend[] | undefined
+
   private logger = createLogger('CLIENT')
 
   constructor({
@@ -492,6 +504,9 @@ class Client {
     targetProduct,
     targetVersion,
     autocapture,
+    maskPersonalDataProperties = false,
+    customPersonalDataProperties = [],
+    beforeSend,
   }: ClientParams) {
     this.baseUri = baseUri
     this.realtimeBaseUri = realtimeBaseUri
@@ -499,6 +514,10 @@ class Client {
     this.targetEnvironment = targetEnvironment
     this.targetProduct = targetProduct
     this.targetVersion = targetVersion
+    this.#maskedUrlParams = maskPersonalDataProperties
+      ? [ ...PERSONAL_DATA_URL_PARAMS, ...customPersonalDataProperties ]
+      : []
+    this.#beforeSend = beforeSend
     this.context = generateContext()
     this.loadIdentity()
     this.initGraphqlClient()
@@ -712,19 +731,19 @@ class Client {
   }
 
   track(event: string, data?: Pick<TrackEventInput, 'data'>) {
-    const variables = {
-      input: {
-        event,
-        data,
-        accountUid: this.#accountUid,
-        accountAnonymousUid: this.#accountAnonymousUid,
-        systemContext: typeof window === 'undefined'
-          ? this.context
-          : this.#pageSystemContext(pageContext(document.referrer)),
-      },
-    }
+    const input = runBeforeSend({
+      event,
+      data,
+      accountUid: this.#accountUid,
+      accountAnonymousUid: this.#accountAnonymousUid,
+      systemContext: typeof window === 'undefined'
+        ? this.context
+        : this.#pageSystemContext(pageContext(document.referrer, this.#maskUrl)),
+    }, this.#beforeSend)
 
-    return this.graphqlClient.mutate({ mutation: TrackEventDocument, variables })
+    if (!input) return Promise.resolve(undefined)
+
+    return this.graphqlClient.mutate({ mutation: TrackEventDocument, variables: { input } })
   }
 
   startAutocapture(options: AutocaptureOptions = {}): void {
@@ -736,6 +755,7 @@ class Client {
       options,
       (event, data, page) => this.#enqueueTrackedEvent(event, data, page),
       () => { void this.#eventQueue?.flush({ keepalive: true }) },
+      this.#maskUrl,
     )
   }
 
@@ -748,15 +768,19 @@ class Client {
   }
 
   #enqueueTrackedEvent(event: string, data: Record<string, unknown>, page: PageContext): void {
-    this.#eventQueue?.enqueue({
+    const queued = runBeforeSend({
       event,
       data,
       accountUid: this.#accountUid,
       accountAnonymousUid: this.#accountAnonymousUid,
       timestamp: new Date().toISOString(),
       systemContext: this.#pageSystemContext(page),
-    })
+    }, this.#beforeSend)
+
+    if (queued) this.#eventQueue?.enqueue(queued)
   }
+
+  #maskUrl = (url: string): string => maskQueryParams(url, this.#maskedUrlParams)
 
   #pageSystemContext(page: PageContext): QueuedEvent['systemContext'] {
     const sessionId = touchSession()

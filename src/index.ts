@@ -40,6 +40,7 @@ import type {
 } from './Client'
 import type { WebSocketOptions, QueuedMessage } from './WebSocketManager'
 import type { AutocaptureOptions } from './autocapture'
+import type { BeforeSend, CapturedEvent } from './privacy'
 import type { ContactKind, ContactStatus, TrackMessageStatus } from './generated'
 
 let instance: Client | null = null
@@ -174,6 +175,8 @@ export type {
   AiNotification,
   AssignedGroupSummary,
   AutocaptureOptions,
+  BeforeSend,
+  CapturedEvent,
   ChatConversationContext,
   ChatConversationSummary,
   ChatConversationTopic,

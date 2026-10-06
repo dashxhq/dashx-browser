@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.13.0
 
 ### Added
 
@@ -9,6 +9,8 @@
   Each event carries `url`, `path`, `referrer` and `title` in its data, and `systemContext.page` plus `systemContext.sessionId` (a session ends after 30 minutes without a captured event, and on `reset()`). A page view is recorded 300ms after the navigation so `title` is the new route's, not the previous page's. Events are batched through the new `trackEvents` mutation every 5 seconds or 20 events, and flushed with `fetch(..., { keepalive })` when the page is hidden so the last batch survives the unload.
 
 - **UTM campaign attribution.** `utm_source`, `utm_medium`, `utm_campaign`, `utm_term` and `utm_content` on the landing URL fill `systemContext.campaign` for every event in that session, including after client-side navigation drops them from the URL.
+
+- **Privacy controls for tracked events.** URLs and referrers are still sent in full by default. `maskPersonalDataProperties: true` replaces the values of ad-click ids (`gclid`, `fbclid`, `msclkid` and similar) in captured URLs and referrers with `<masked>`, and `customPersonalDataProperties` adds your own query parameters to that list. `beforeSend` (a function or an array of them) runs on every event from `track()` and autocapture before it is sent; return the event, edited as needed, or `null` to drop it. A dropped `track()` call resolves to `undefined`.
 
 ### Changed
 

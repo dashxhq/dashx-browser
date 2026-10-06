@@ -40,20 +40,27 @@ function pageKey(location: Location): string {
 // Routers change the URL before rendering the route that sets its title.
 export const TITLE_SETTLE_MS = 300
 
-export function pageContext(referrer: string | null): PageContext {
+const keepUrl = (url: string) => url
+
+export function pageContext(referrer: string | null, maskUrl: (_url: string) => string = keepUrl): PageContext {
   return {
-    url: window.location.href,
+    url: maskUrl(window.location.href),
     path: window.location.pathname,
-    referrer: referrer || null,
+    referrer: referrer ? maskUrl(referrer) : null,
     title: document.title || null,
   }
 }
 
-export function startAutocapture(options: AutocaptureOptions, capture: Capture, flush: () => void): () => void {
+export function startAutocapture(
+  options: AutocaptureOptions,
+  capture: Capture,
+  flush: () => void,
+  maskUrl: (_url: string) => string = keepUrl,
+): () => void {
   const pageviews = options.pageviews ?? true
   const pageleave = options.pageleave ?? true
 
-  let page = pageContext(document.referrer)
+  let page = pageContext(document.referrer, maskUrl)
   let key = pageKey(window.location)
   let enteredAt = Date.now()
   let hasLeft = false
@@ -91,7 +98,7 @@ export function startAutocapture(options: AutocaptureOptions, capture: Capture, 
     if (nextKey === key) return
     leave()
     key = nextKey
-    page = pageContext(page.url)
+    page = pageContext(page.url, maskUrl)
     view()
   }
 

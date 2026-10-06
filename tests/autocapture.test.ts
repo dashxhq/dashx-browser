@@ -4,6 +4,7 @@ import { TITLE_SETTLE_MS } from '../src/autocapture'
 import Client from '../src/Client'
 import EventQueue, { FLUSH_INTERVAL_MS, MAX_BATCH_SIZE } from '../src/EventQueue'
 import type { QueuedEvent } from '../src/EventQueue'
+import { MASKED, maskQueryParams } from '../src/privacy'
 import { SESSION_IDLE_TIMEOUT_MS, campaignFromUrl, endSession, touchSession } from '../src/session'
 
 type SentRequest = { init: RequestInit, events: QueuedEvent[] }
@@ -22,8 +23,10 @@ function sentEvents(): QueuedEvent[] {
   return sent().flatMap((request) => request.events)
 }
 
-function makeClient(autocapture: ConstructorParameters<typeof Client>[0]['autocapture'] = true): Client {
-  const client = new Client({ publicKey: 'pk_test', targetEnvironment: 'test', autocapture })
+type ClientParams = ConstructorParameters<typeof Client>[0]
+
+function makeClient(autocapture: ClientParams['autocapture'] = true, params: Partial<ClientParams> = {}): Client {
+  const client = new Client({ publicKey: 'pk_test', targetEnvironment: 'test', autocapture, ...params })
   clients.push(client)
   return client
 }
@@ -208,6 +211,77 @@ describe('track', () => {
     const context = mutate.mock.calls[0][0].variables.input.systemContext
     expect(context.page).toMatchObject({ path: '/start', url: 'http://localhost:3000/start' })
     expect(context.sessionId).toBe(sentEvents()[0].systemContext.sessionId)
+  })
+})
+
+describe('privacy', () => {
+  it('sends URLs in full by default', async () => {
+    window.history.replaceState(null, '', '/start?gclid=abc&plan=pro')
+    makeClient()
+    await flushTimers()
+
+    expect(sentEvents()[0].systemContext.page.url).toBe('http://localhost:3000/start?gclid=abc&plan=pro')
+  })
+
+  it('masks ad-click ids and custom parameters in urls and referrers, keeping the campaign', async () => {
+    window.history.replaceState(null, '', '/start?gclid=abc&token=t1&plan=pro&utm_source=mail')
+    makeClient(true, { maskPersonalDataProperties: true, customPersonalDataProperties: [ 'token' ] })
+    vi.advanceTimersByTime(TITLE_SETTLE_MS)
+    window.history.pushState(null, '', '/next?fbclid=xyz')
+    await flushTimers()
+
+    const [ landing, leave, next ] = sentEvents()
+    const maskedLanding = `http://localhost:3000/start?gclid=${MASKED}&token=${MASKED}&plan=pro&utm_source=mail`
+    expect(landing.data).toMatchObject({ url: maskedLanding })
+    expect(landing.systemContext.page.url).toBe(maskedLanding)
+    expect(landing.systemContext.campaign).toMatchObject({ source: 'mail' })
+    expect(leave.data).toMatchObject({ url: maskedLanding })
+    expect(next.systemContext.page).toMatchObject({
+      url: `http://localhost:3000/next?fbclid=${MASKED}`,
+      referrer: maskedLanding,
+    })
+  })
+
+  it('ignores custom parameters unless masking is on', async () => {
+    window.history.replaceState(null, '', '/start?token=t1')
+    makeClient(true, { customPersonalDataProperties: [ 'token' ] })
+    await flushTimers()
+
+    expect(sentEvents()[0].systemContext.page.url).toBe('http://localhost:3000/start?token=t1')
+  })
+
+  it('lets beforeSend rewrite or drop autocaptured events, in order', async () => {
+    window.history.replaceState(null, '', '/start?q=secret')
+    makeClient(true, {
+      beforeSend: [
+        (event) => (event.event === '$pageleave' ? null : event),
+        (event) => ({ ...event, data: { ...(event.data as object), url: 'redacted' } }),
+      ],
+    })
+    vi.advanceTimersByTime(TITLE_SETTLE_MS)
+    window.history.pushState(null, '', '/next')
+    await flushTimers()
+
+    const events = sentEvents()
+    expect(events.map((e) => e.event)).toEqual([ '$pageview', '$pageview' ])
+    expect(events.every((e) => e.data.url === 'redacted')).toBe(true)
+  })
+
+  it('lets beforeSend drop a track() call before it is sent', async () => {
+    const client = makeClient(false, { beforeSend: (event) => (event.event === 'Secret' ? null : event) })
+    const mutate = vi.spyOn(client.graphqlClient, 'mutate').mockResolvedValue({ data: null })
+
+    await expect(client.track('Secret')).resolves.toBeUndefined()
+    client.track('Signed Up')
+
+    expect(mutate.mock.calls.map(([ options ]) => options.variables?.input.event)).toEqual([ 'Signed Up' ])
+  })
+})
+
+describe('maskQueryParams', () => {
+  it('masks only exact names and leaves the rest of the url untouched', () => {
+    expect(maskQueryParams('https://a.test/p%20q?xgclid=1&gclid=2&q=a+b#/route?gclid=3', [ 'gclid' ]))
+      .toBe(`https://a.test/p%20q?xgclid=1&gclid=${MASKED}&q=a+b#/route?gclid=3`)
   })
 })
 
