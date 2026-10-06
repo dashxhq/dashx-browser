@@ -39,6 +39,8 @@ import type {
   SubscribeOptions,
 } from './Client'
 import type { WebSocketOptions, QueuedMessage } from './WebSocketManager'
+import type { AutocaptureOptions } from './autocapture'
+import type { BeforeSend, CapturedEvent } from './privacy'
 import type { ContactKind, ContactStatus, TrackMessageStatus } from './generated'
 
 let instance: Client | null = null
@@ -52,6 +54,7 @@ function ensureConfigured(): Client {
 
 const DashX = {
   configure(params: ClientParams): Client {
+    instance?.stopAutocapture()
     instance = new Client(params)
     return instance
   },
@@ -72,6 +75,8 @@ const DashX = {
 
   // Analytics
   track(event: string, data?: any) { return ensureConfigured().track(event, data) },
+  startAutocapture(options?: AutocaptureOptions) { return ensureConfigured().startAutocapture(options) },
+  stopAutocapture() { return ensureConfigured().stopAutocapture() },
   trackMessage(params: Parameters<Client['trackMessage']>[0]) { return ensureConfigured().trackMessage(params) },
   trackAllMessages(params?: Parameters<Client['trackAllMessages']>[0]) { return ensureConfigured().trackAllMessages(params) },
 
@@ -170,6 +175,9 @@ export type {
   AiAgentStarterSuggestion,
   AiNotification,
   AssignedGroupSummary,
+  AutocaptureOptions,
+  BeforeSend,
+  CapturedEvent,
   ChatConversationContext,
   ChatConversationSummary,
   ChatConversationTopic,

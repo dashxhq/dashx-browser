@@ -1,8 +1,13 @@
+import type { SystemContextCampaignInput } from './generated'
+
 type PersistedData = {
   accountAnonymousUid: string,
   accountUid: string | null,
   identityToken: string | null,
   fcmToken: string | null,
+  sessionId: string | null,
+  sessionLastActivityAt: number | null,
+  sessionCampaign: { sessionId: string, campaign: SystemContextCampaignInput } | null,
 }
 
 const LOCAL_STORAGE_KEY = 'dashx-sdk'

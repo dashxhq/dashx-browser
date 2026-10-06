@@ -1,9 +1,16 @@
 import uuid from 'uuid-random'
 import { ApolloCache, ApolloClient, ApolloLink, HttpLink, InMemoryCache, gql } from '@apollo/client/core'
 import { SetContextLink } from '@apollo/client/link/context'
+import { print } from 'graphql'
 import type { ObservableQuery } from '@apollo/client/core'
 
+import { pageContext, startAutocapture } from './autocapture'
+import type { AutocaptureOptions, RunningAutocapture } from './autocapture'
 import generateContext from './context'
+import EventQueue from './EventQueue'
+import type { PageContext, QueuedEvent } from './EventQueue'
+import { PERSONAL_DATA_URL_PARAMS, maskQueryParams, runBeforeSend } from './privacy'
+import type { BeforeSend } from './privacy'
 import packageInfo from '../package.json'
 import SearchRecordsInputBuilder, { FetchRecordsOptions, SearchRecordsOptions } from './SearchRecordsInputBuilder'
 import WebSocketManager from './WebSocketManager'
@@ -37,7 +44,7 @@ import {
   SummarizeInAppChatConversationsDocument,
   SummarizeInAppChatMessagesDocument,
   SummarizeInAppChatUnreadDocument,
-  TrackEventDocument,
+  TrackEventsDocument,
   TrackMessageDocument,
   TransferCartDocument,
   UnsubscribeContactDocument,
@@ -60,6 +67,7 @@ import type {
 import { createLogger } from './logging'
 import { DEFAULT_BASE_URI, TRACK_MESSAGE_STATUS } from './constants'
 import { getItem, setItem } from './storage'
+import { endSession, sessionCampaign, touchSession } from './session'
 import type { DashXPushPayload } from './push-types'
 
 const UPLOAD_RETRY_LIMIT = 5
@@ -77,6 +85,12 @@ const TrackAllMessagesDocument = gql`
     }
   }
 `
+// Printed rather than sent through Apollo: batches go out with `fetch(..., { keepalive })` so one
+// flushed as the page unloads still arrives.
+const TRACK_EVENTS_QUERY = print(TrackEventsDocument)
+// Browsers fail a keepalive fetch outright once the page's in-flight keepalive bodies would pass
+// 64KB; the margin leaves room for other scripts' keepalive requests.
+const KEEPALIVE_BUDGET_BYTES = 60 * 1024
 const UNIDENTIFIED_USER_ERROR = 'This operation can be performed only by an identified user. Ensure `dashx.identify` is run before calling this method.'
 
 // Terminal close-code band. When the server closes the socket with a code in
@@ -103,7 +117,15 @@ type ClientParams = {
   publicKey: string,
   targetEnvironment: string,
   targetProduct?: string,
-  targetVersion?: string
+  targetVersion?: string,
+  // Opt-in: `true` captures page views and page leaves.
+  autocapture?: boolean | AutocaptureOptions,
+  // Masks ad-click ids (`gclid`, `fbclid`, ...) in captured URLs and referrers.
+  maskPersonalDataProperties?: boolean,
+  // Extra query parameters masked alongside them; ignored unless `maskPersonalDataProperties`.
+  customPersonalDataProperties?: string[],
+  // Runs on every tracked event before it is sent; return `null` to drop the event.
+  beforeSend?: BeforeSend | BeforeSend[],
 }
 
 type IdentifyParams = Record<string, any>
@@ -466,6 +488,16 @@ class Client {
 
   context: SystemContextInput
 
+  #eventQueue: EventQueue | null = null
+
+  #autocapture: RunningAutocapture | null = null
+
+  #keepaliveBytesInFlight = 0
+
+  #maskedUrlParams: string[]
+
+  #beforeSend: BeforeSend | BeforeSend[] | undefined
+
   private logger = createLogger('CLIENT')
 
   constructor({
@@ -474,7 +506,11 @@ class Client {
     realtimeBaseUri = 'wss://realtime.dashx.com',
     targetEnvironment,
     targetProduct,
-    targetVersion
+    targetVersion,
+    autocapture,
+    maskPersonalDataProperties = false,
+    customPersonalDataProperties = [],
+    beforeSend,
   }: ClientParams) {
     this.baseUri = baseUri
     this.realtimeBaseUri = realtimeBaseUri
@@ -482,9 +518,17 @@ class Client {
     this.targetEnvironment = targetEnvironment
     this.targetProduct = targetProduct
     this.targetVersion = targetVersion
+    this.#maskedUrlParams = maskPersonalDataProperties
+      ? [ ...PERSONAL_DATA_URL_PARAMS, ...customPersonalDataProperties ]
+      : []
+    this.#beforeSend = beforeSend
     this.context = generateContext()
     this.loadIdentity()
     this.initGraphqlClient()
+
+    if (autocapture) {
+      this.startAutocapture(autocapture === true ? {} : autocapture)
+    }
   }
 
   get accountAnonymousUid(): string | null {
@@ -539,9 +583,7 @@ class Client {
     const authLink = new SetContextLink(({ headers }) => ({
       headers: {
         ...headers,
-        'X-Public-Key': this.publicKey,
-        'X-Target-Environment': this.targetEnvironment,
-        ...(this.#identityToken ? { 'X-Identity-Token': this.#identityToken } : {}),
+        ...this.#requestHeaders(),
       },
     }))
 
@@ -578,6 +620,14 @@ class Client {
         },
       },
     })
+  }
+
+  #requestHeaders(): Record<string, string> {
+    return {
+      'X-Public-Key': this.publicKey,
+      'X-Target-Environment': this.targetEnvironment,
+      ...(this.#identityToken ? { 'X-Identity-Token': this.#identityToken } : {}),
+    }
   }
 
   private loadIdentity() {
@@ -677,24 +727,103 @@ class Client {
     // direct `accountUid`/`identityToken` reset would leave the socket
     // authenticated and still receiving the previous visitor's chat events.
     this.setIdentity()
+    endSession()
     this.#foregroundMessageUnsubscribe?.()
     this.#foregroundMessageUnsubscribe = null
     this.#firebaseMessaging = null
     setItem('fcmToken', null)
   }
 
-  track(event: string, data?: Pick<TrackEventInput, 'data'>) {
-    const variables = {
-      input: {
-        event,
-        data,
-        accountUid: this.#accountUid,
-        accountAnonymousUid: this.#accountAnonymousUid,
-        systemContext: this.context,
-      },
-    }
+  // Resolves once the event has been sent; failures are logged, never thrown.
+  track(event: string, data?: Pick<TrackEventInput, 'data'>): Promise<void> {
+    const queued = runBeforeSend<QueuedEvent>({
+      event,
+      data: data as QueuedEvent['data'],
+      accountUid: this.#accountUid,
+      accountAnonymousUid: this.#accountAnonymousUid,
+      timestamp: new Date().toISOString(),
+      systemContext: typeof window === 'undefined'
+        ? this.context
+        : this.#pageSystemContext(this.#autocapture?.currentPage() ?? pageContext(document.referrer, this.#maskUrl)),
+    }, this.#beforeSend)
 
-    return this.graphqlClient.mutate({ mutation: TrackEventDocument, variables })
+    if (!queued) return Promise.resolve()
+
+    const queue = this.#ensureEventQueue()
+    queue.enqueue(queued)
+    // Sent now, not on the batch timer, so an event tracked just before a navigation still arrives.
+    return queue.flushSoon({ keepalive: true })
+  }
+
+  startAutocapture(options: AutocaptureOptions = {}): void {
+    if (typeof window === 'undefined') return
+
+    this.stopAutocapture()
+    this.#ensureEventQueue()
+    this.#autocapture = startAutocapture(
+      options,
+      (event, data, page) => this.#enqueueTrackedEvent(event, data, page),
+      () => { void this.#eventQueue?.flush({ keepalive: true }) },
+      this.#maskUrl,
+    )
+  }
+
+  stopAutocapture(): void {
+    if (!this.#autocapture) return
+
+    this.#autocapture.stop()
+    this.#autocapture = null
+    void this.#eventQueue?.flush({ keepalive: true })
+  }
+
+  #ensureEventQueue(): EventQueue {
+    this.#eventQueue ??= new EventQueue((events, sendOptions) => this.#sendTrackedEvents(events, sendOptions))
+    return this.#eventQueue
+  }
+
+  #enqueueTrackedEvent(event: string, data: Record<string, unknown>, page: PageContext): void {
+    const queued = runBeforeSend({
+      event,
+      data,
+      accountUid: this.#accountUid,
+      accountAnonymousUid: this.#accountAnonymousUid,
+      timestamp: new Date().toISOString(),
+      systemContext: this.#pageSystemContext(page),
+    }, this.#beforeSend)
+
+    if (queued) this.#eventQueue?.enqueue(queued)
+  }
+
+  #maskUrl = (url: string): string => maskQueryParams(url, this.#maskedUrlParams)
+
+  #pageSystemContext(page: PageContext): QueuedEvent['systemContext'] {
+    const sessionId = touchSession()
+    const campaign = sessionCampaign(sessionId, page.url)
+    return { ...this.context, page, sessionId, ...(campaign ? { campaign } : {}) }
+  }
+
+  async #sendTrackedEvents(events: QueuedEvent[], { keepalive }: { keepalive: boolean }): Promise<void> {
+    const payload = JSON.stringify({ query: TRACK_EVENTS_QUERY, variables: { input: { events } } })
+    const bytes = new TextEncoder().encode(payload).length
+    const useKeepalive = keepalive && this.#keepaliveBytesInFlight + bytes <= KEEPALIVE_BUDGET_BYTES
+    if (useKeepalive) this.#keepaliveBytesInFlight += bytes
+
+    try {
+      const response = await fetch(this.baseUri, {
+        method: 'POST',
+        keepalive: useKeepalive,
+        headers: { 'Content-Type': 'application/json', ...this.#requestHeaders() },
+        body: payload,
+      })
+      const body = await response.json().catch(() => null)
+      if (!response.ok || body?.errors) {
+        this.logger.error('Failed to track events:', body?.errors ?? response.status)
+      }
+    } catch (error) {
+      this.logger.error('Failed to track events:', error)
+    } finally {
+      if (useKeepalive) this.#keepaliveBytesInFlight -= bytes
+    }
   }
 
   trackMessage({ id, status, timestamp }: TrackMessageParams) {

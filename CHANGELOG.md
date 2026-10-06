@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Page view autocapture (opt-in).** `DashX.configure({ ..., autocapture: true })`, or `startAutocapture()` / `stopAutocapture()` at runtime, tracks `$pageview` on load and on every client-side navigation (`pushState`, `replaceState`, back/forward, hash-router routes) and `$pageleave` with `durationMs` when the visitor navigates away or the tab is closed. Query-string and in-page anchor changes are not new pages. Pass `{ pageviews, pageleave }` to turn either off.
+
+  Each event carries `url`, `path`, `referrer` and `title` in its data, and `systemContext.page` plus `systemContext.sessionId` (a session ends after 30 minutes without a captured event, and on `reset()`). A page view is recorded 300ms after the navigation so `title` is the new route's, not the previous page's. Events are sent in batches every 5 seconds or 20 events, and flushed with `fetch(..., { keepalive })` when the page is hidden so the last batch survives the unload. Calling `configure()` again stops the previous client's autocapture.
+
+- **UTM campaign attribution.** `utm_source`, `utm_medium`, `utm_campaign`, `utm_term` and `utm_content` on the landing URL fill `systemContext.campaign` for every event in that session, including after client-side navigation drops them from the URL.
+
+- **Privacy controls for tracked events.** URLs and referrers are still sent in full by default. `maskPersonalDataProperties: true` replaces the values of ad-click ids (`gclid`, `fbclid`, `msclkid` and similar) in captured URLs and referrers with `<masked>`, and `customPersonalDataProperties` adds your own query parameters to that list. `beforeSend` (a function or an array of them) runs on every event from `track()` and autocapture before it is sent; return the event, edited as needed, or `null` to drop it. A hook that throws drops the event and logs the error.
+
+### Changed
+
+- **`track()` now sends `systemContext.page`, `sessionId` and `campaign` in the browser,** so manually tracked events line up with the page and session they happened in. While autocapture runs, it reports the current URL with the referrer autocapture recorded, so after client-side navigation its referrer is the previous route rather than `document.referrer`. It still sends only the base context during server-side rendering.
+
+- **`track()` sends through the same queue as autocapture.** The event goes out at once, together with any queued autocaptured events, using `fetch(..., { keepalive })`, so an event tracked just before a navigation still arrives. Calls in the same tick share one request, and a request that would push the page's in-flight keepalive bodies past the browser's 64KB limit is sent without keepalive instead of failing. `track()` now resolves to `undefined` once the event is sent rather than returning the GraphQL mutation result, and a failed send is logged instead of rejecting.
+
 ## 0.12.1
 
 ### Fixed
