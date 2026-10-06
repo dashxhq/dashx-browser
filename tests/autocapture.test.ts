@@ -259,6 +259,22 @@ describe('track', () => {
     expect(tracked?.systemContext.page?.referrer).toBe('http://localhost:3000/start')
   })
 
+  it('reports the current url, masked, after a query-string change, keeping the previous route as referrer', async () => {
+    const client = makeClient(true, { maskPersonalDataProperties: true })
+    window.history.pushState(null, '', '/search')
+    await vi.advanceTimersByTimeAsync(TITLE_SETTLE_MS)
+    window.history.replaceState(null, '', '/search?q=shoes&gclid=abc')
+
+    await client.track('Searched')
+
+    const tracked = sentEvents().find((e) => e.event === 'Searched')
+    expect(tracked?.systemContext.page).toMatchObject({
+      url: 'http://localhost:3000/search?q=shoes&gclid=<masked>',
+      path: '/search',
+      referrer: 'http://localhost:3000/start',
+    })
+  })
+
   it('sends calls made in the same tick as one request', async () => {
     const client = makeClient(false)
 

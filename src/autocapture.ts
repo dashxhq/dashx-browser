@@ -9,8 +9,8 @@ export type Capture = (_event: string, _data: Record<string, unknown>, _page: Pa
 
 export type RunningAutocapture = {
   stop: () => void,
-  // The page as autocapture records it: after client-side navigation the referrer is the previous
-  // route, which `document.referrer` never reflects.
+  // The current location with autocapture's referrer: after client-side navigation that is the
+  // previous route, which `document.referrer` never reflects.
   currentPage: () => PageContext,
 }
 
@@ -148,6 +148,12 @@ export function startAutocapture(
       window.removeEventListener('pageshow', onPageShow)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     },
-    currentPage: () => ({ ...page, title: document.title || null }),
+    // A query-string change is not a new page, so `page` still holds the URL from before it.
+    currentPage: () => ({
+      ...page,
+      url: maskUrl(window.location.href),
+      path: window.location.pathname,
+      title: document.title || null,
+    }),
   }
 }

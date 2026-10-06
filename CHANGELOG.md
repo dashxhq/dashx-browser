@@ -14,7 +14,7 @@
 
 ### Changed
 
-- **`track()` now sends `systemContext.page`, `sessionId` and `campaign` in the browser,** so manually tracked events line up with the page and session they happened in. While autocapture runs, it reports the same page as the last page view, so after client-side navigation its referrer is the previous route rather than `document.referrer`. It still sends only the base context during server-side rendering.
+- **`track()` now sends `systemContext.page`, `sessionId` and `campaign` in the browser,** so manually tracked events line up with the page and session they happened in. While autocapture runs, it reports the current URL with the referrer autocapture recorded, so after client-side navigation its referrer is the previous route rather than `document.referrer`. It still sends only the base context during server-side rendering.
 
 - **`track()` sends through the same queue as autocapture.** The event goes out at once, together with any queued autocaptured events, using `fetch(..., { keepalive })`, so an event tracked just before a navigation still arrives. Calls in the same tick share one request, and a request that would push the page's in-flight keepalive bodies past the browser's 64KB limit is sent without keepalive instead of failing. `track()` now resolves to `undefined` once the event is sent rather than returning the GraphQL mutation result, and a failed send is logged instead of rejecting.
 
