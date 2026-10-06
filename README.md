@@ -70,7 +70,7 @@ A change to only the query string or an in-page anchor is not a new page. A page
 DashX.configure({ ..., autocapture: { pageleave: false } })
 ```
 
-Events are sent in batches through the `trackEvents` mutation, every 5 seconds or 20 events, and the last batch is flushed with `fetch(..., { keepalive: true })` when the page is hidden.
+Events are sent in batches every 5 seconds or 20 events, and the last batch is flushed with `fetch(..., { keepalive: true })` when the page is hidden.
 
 #### Sessions and campaigns
 
@@ -98,8 +98,6 @@ DashX.configure({
 ```
 
 `beforeSend` also accepts an array of functions, run in order; the first to return `null` drops the event. It applies to `DashX.track()` too, where a dropped call resolves to `undefined`.
-
-Autocapture needs a DashX API with the `trackEvents` mutation.
 
 ## Contributing
 

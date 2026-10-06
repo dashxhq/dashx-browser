@@ -6,7 +6,7 @@
 
 - **Page view autocapture (opt-in).** `DashX.configure({ ..., autocapture: true })`, or `startAutocapture()` / `stopAutocapture()` at runtime, tracks `$pageview` on load and on every client-side navigation (`pushState`, `replaceState`, back/forward, hash-router routes) and `$pageleave` with `durationMs` when the visitor navigates away or the tab is closed. Query-string and in-page anchor changes are not new pages. Pass `{ pageviews, pageleave }` to turn either off.
 
-  Each event carries `url`, `path`, `referrer` and `title` in its data, and `systemContext.page` plus `systemContext.sessionId` (a session ends after 30 minutes without a captured event, and on `reset()`). A page view is recorded 300ms after the navigation so `title` is the new route's, not the previous page's. Events are batched through the new `trackEvents` mutation every 5 seconds or 20 events, and flushed with `fetch(..., { keepalive })` when the page is hidden so the last batch survives the unload.
+  Each event carries `url`, `path`, `referrer` and `title` in its data, and `systemContext.page` plus `systemContext.sessionId` (a session ends after 30 minutes without a captured event, and on `reset()`). A page view is recorded 300ms after the navigation so `title` is the new route's, not the previous page's. Events are sent in batches every 5 seconds or 20 events, and flushed with `fetch(..., { keepalive })` when the page is hidden so the last batch survives the unload.
 
 - **UTM campaign attribution.** `utm_source`, `utm_medium`, `utm_campaign`, `utm_term` and `utm_content` on the landing URL fill `systemContext.campaign` for every event in that session, including after client-side navigation drops them from the URL.
 
@@ -15,8 +15,6 @@
 ### Changed
 
 - **`track()` now sends `systemContext.page`, `sessionId` and `campaign` in the browser,** so manually tracked events line up with the page and session they happened in. It still sends only the base context during server-side rendering.
-
-  Requires an API with the `trackEvents` mutation and the `page` / `sessionId` system context fields. Against an older server, autocaptured batches are rejected and logged, and `track()` calls fail validation.
 
 ## 0.12.1
 
@@ -35,8 +33,6 @@
 ### Fixed
 
 - **`screen.density` is no longer rounded.** The schema now types it as `Float`, so `generateContext` sends `devicePixelRatio` as the browser reports it (1.25, 1.5, 2.625, …) instead of collapsing every scaled display and zoomed browser onto the nearest integer. `screen.height` and `screen.width` stay `Int` and are still rounded, and a non-finite ratio still falls back to `1`.
-
-  Requires an API that types `SystemContextScreenInput.density` as `Float`; against an older `Int` server a fractional density fails variable coercion for the whole request.
 
 ## 0.11.0
 
