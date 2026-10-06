@@ -259,6 +259,37 @@ describe('track', () => {
     expect(tracked?.systemContext.page?.referrer).toBe('http://localhost:3000/start')
   })
 
+  it('sends calls made in the same tick as one request', async () => {
+    const client = makeClient(false)
+
+    await Promise.all([ client.track('A'), client.track('B'), client.track('C') ])
+
+    expect(sent()).toHaveLength(1)
+    expect(sentEvents().map((e) => e.event)).toEqual([ 'A', 'B', 'C' ])
+  })
+
+  it('stops using keepalive once in-flight keepalive bodies would pass the budget', async () => {
+    const settle: Array<() => void> = []
+    fetchMock.mockImplementation(() => new Promise((resolve) => {
+      settle.push(() => resolve({ ok: true, json: async () => ({}) }))
+    }))
+    const client = makeClient(false)
+    const blob = 'x'.repeat(25_000)
+    const keepalives = () => fetchMock.mock.calls.map(([ , init ]) => init.keepalive)
+
+    for (const event of [ 'A', 'B', 'C' ]) {
+      void client.track(event, { data: { blob } })
+      await vi.advanceTimersByTimeAsync(0)
+    }
+    expect(keepalives()).toEqual([ true, true, false ])
+
+    settle[0]()
+    await vi.advanceTimersByTimeAsync(0)
+    void client.track('D', { data: { blob } })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(keepalives()).toEqual([ true, true, false, true ])
+  })
+
   it('works without autocapture', async () => {
     const client = makeClient(false)
 

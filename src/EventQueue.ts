@@ -23,6 +23,8 @@ export default class EventQueue {
 
   #timer: ReturnType<typeof setTimeout> | null = null
 
+  #scheduled: Promise<void> | null = null
+
   readonly #send: SendEvents
 
   constructor(send: SendEvents) {
@@ -41,6 +43,15 @@ export default class EventQueue {
     } else if (!this.#timer) {
       this.#timer = setTimeout(() => { void this.flush() }, FLUSH_INTERVAL_MS)
     }
+  }
+
+  // Calls in the same tick share one request instead of each sending its own.
+  flushSoon(options: { keepalive?: boolean } = {}): Promise<void> {
+    this.#scheduled ??= Promise.resolve().then(() => {
+      this.#scheduled = null
+      return this.flush(options)
+    })
+    return this.#scheduled
   }
 
   // Events are dropped, not retried, when a send fails: tracking is best-effort.

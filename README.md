@@ -70,7 +70,7 @@ A change to only the query string or an in-page anchor is not a new page. A page
 DashX.configure({ ..., autocapture: { pageleave: false } })
 ```
 
-Autocaptured events are sent in batches every 5 seconds or 20 events, and the last batch is flushed with `fetch(..., { keepalive: true })` when the page is hidden. `DashX.track()` sends right away, with keepalive, taking any queued events with it, so an event tracked just before a navigation still arrives. It resolves once the event is sent and never rejects; failures are logged.
+Autocaptured events are sent in batches every 5 seconds or 20 events, and the last batch is flushed with `fetch(..., { keepalive: true })` when the page is hidden. `DashX.track()` sends right away, with keepalive, taking any queued events with it, so an event tracked just before a navigation still arrives. Calls made in the same tick share one request, and once the browser's 64KB limit on in-flight keepalive requests would be exceeded, the request is sent without keepalive rather than failing. It resolves once the event is sent and never rejects; failures are logged.
 
 #### Sessions and campaigns
 

@@ -88,8 +88,9 @@ const TrackAllMessagesDocument = gql`
 // Printed rather than sent through Apollo: batches go out with `fetch(..., { keepalive })` so one
 // flushed as the page unloads still arrives.
 const TRACK_EVENTS_QUERY = print(TrackEventsDocument)
-// Browsers reject a keepalive request whose body would push in-flight keepalive bodies past 64KB.
-const KEEPALIVE_MAX_BYTES = 60 * 1024
+// Browsers fail a keepalive fetch outright once the page's in-flight keepalive bodies would pass
+// 64KB; the margin leaves room for other scripts' keepalive requests.
+const KEEPALIVE_BUDGET_BYTES = 60 * 1024
 const UNIDENTIFIED_USER_ERROR = 'This operation can be performed only by an identified user. Ensure `dashx.identify` is run before calling this method.'
 
 // Terminal close-code band. When the server closes the socket with a code in
@@ -491,6 +492,8 @@ class Client {
 
   #autocapture: RunningAutocapture | null = null
 
+  #keepaliveBytesInFlight = 0
+
   #maskedUrlParams: string[]
 
   #beforeSend: BeforeSend | BeforeSend[] | undefined
@@ -749,7 +752,7 @@ class Client {
     const queue = this.#ensureEventQueue()
     queue.enqueue(queued)
     // Sent now, not on the batch timer, so an event tracked just before a navigation still arrives.
-    return queue.flush({ keepalive: true })
+    return queue.flushSoon({ keepalive: true })
   }
 
   startAutocapture(options: AutocaptureOptions = {}): void {
@@ -800,11 +803,15 @@ class Client {
   }
 
   async #sendTrackedEvents(events: QueuedEvent[], { keepalive }: { keepalive: boolean }): Promise<void> {
+    const payload = JSON.stringify({ query: TRACK_EVENTS_QUERY, variables: { input: { events } } })
+    const bytes = new TextEncoder().encode(payload).length
+    const useKeepalive = keepalive && this.#keepaliveBytesInFlight + bytes <= KEEPALIVE_BUDGET_BYTES
+    if (useKeepalive) this.#keepaliveBytesInFlight += bytes
+
     try {
-      const payload = JSON.stringify({ query: TRACK_EVENTS_QUERY, variables: { input: { events } } })
       const response = await fetch(this.baseUri, {
         method: 'POST',
-        keepalive: keepalive && new TextEncoder().encode(payload).length <= KEEPALIVE_MAX_BYTES,
+        keepalive: useKeepalive,
         headers: { 'Content-Type': 'application/json', ...this.#requestHeaders() },
         body: payload,
       })
@@ -814,6 +821,8 @@ class Client {
       }
     } catch (error) {
       this.logger.error('Failed to track events:', error)
+    } finally {
+      if (useKeepalive) this.#keepaliveBytesInFlight -= bytes
     }
   }
 
