@@ -75,9 +75,10 @@ function elementPath(event: Event): Element[] {
   return elementsFromTarget
 }
 
+// Every recorded free-text value passes through here, so none can skip the sensitive-number check.
 function clean(value: string | null | undefined): string | undefined {
   const text = value?.replace(/\s+/g, ' ').trim()
-  if (!text) return undefined
+  if (!text || SENSITIVE_TEXT.test(text)) return undefined
   return text.slice(0, MAX_TEXT_LENGTH)
 }
 
@@ -89,8 +90,7 @@ function visibleText(element: Element): string | undefined {
   }
   if ((element as HTMLElement).isContentEditable) return undefined
 
-  const text = clean((element as HTMLElement).innerText || element.textContent)
-  return text && !SENSITIVE_TEXT.test(text) ? text : undefined
+  return clean((element as HTMLElement).innerText || element.textContent)
 }
 
 function classesOf(element: Element): string[] {
@@ -118,7 +118,7 @@ function dataAttributesOf(element: Element): Record<string, string> | undefined 
   for (const { name, value } of Array.from(element.attributes)) {
     if (!name.startsWith('data-') || name === CAPTURE_ATTRIBUTE) continue
     const cleaned = clean(value)
-    if (cleaned && !SENSITIVE_TEXT.test(cleaned)) attributes[name] = cleaned
+    if (cleaned) attributes[name] = cleaned
   }
   return Object.keys(attributes).length ? attributes : undefined
 }

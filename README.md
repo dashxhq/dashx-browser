@@ -75,7 +75,7 @@ DashX.configure({ ..., autocapture: { clicks: false } })
 
 A click is credited to the nearest link, button, `summary`, button-like input, checkbox, radio, or element with an interactive `role` (`button`, `link`, `tab`, `menuitem` and similar) around what was clicked. Clicks on anything else are ignored; add `data-dx-capture` to an element to record clicks on it anyway. `text` is the element's visible text, up to 255 characters; icon-only elements have none and are named by `aria-label` (or `title`). `selector` is the element and up to four of its ancestors, for telling apart elements with the same text.
 
-What was typed is never recorded: an input contributes its value only when it is a button's label, and form submits carry the form's `id`, `name` and `selector`, not its fields. Text and `data-*` values that look like card numbers or social security numbers are dropped. Add the `dx-no-capture` class or a `data-dx-no-capture` attribute to an element to skip it and everything inside it:
+What was typed is never recorded: an input contributes its value only when it is a button's label, and form submits carry the form's `id`, `name` and `selector`, not its fields. Any recorded text that looks like a card number or social security number is dropped, whether it is visible text, a button's value, `aria-label`, `title`, `name` or a `data-*` value. Add the `dx-no-capture` class or a `data-dx-no-capture` attribute to an element to skip it and everything inside it:
 
 ```html
 <div class="dx-no-capture">

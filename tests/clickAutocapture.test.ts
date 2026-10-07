@@ -162,13 +162,23 @@ describe('click autocapture', () => {
     expect(JSON.stringify(data)).not.toContain('secret-value')
   })
 
-  it('drops text that looks like a card number', async () => {
-    render('<button id="card">Pay with 4242 4242 4242 4242</button>')
+  it('drops every value that looks like a card or social security number', async () => {
+    render(`
+      <button id="text">Pay with 4242 4242 4242 4242</button>
+      <input id="value" type="submit" value="4242 4242 4242 4242">
+      <button id="label" aria-label="Card 4242-4242-4242-4242"></button>
+      <button id="title" title="SSN 123-45-6789"></button>
+      <button id="data" name="123-45-6789" data-card="4242424242424242">Go</button>
+      <button id="long">${'Lorem ipsum '.repeat(21)}4242 4242 4242 4242</button>
+    `)
     makeClient()
-    click('#card')
+    for (const id of [ 'text', 'value', 'label', 'title', 'data', 'long' ]) click(`#${id}`)
     await flushTimers()
 
-    expect(clicks()[0].data).not.toHaveProperty('text')
+    const data = clicks().map((event) => event.data)
+    expect(data.map((element) => element.elementId)).toEqual([ 'text', 'value', 'label', 'title', 'data', 'long' ])
+    expect(JSON.stringify(data)).not.toMatch(/4242|123-45-6789/)
+    expect(data[4]).toMatchObject({ text: 'Go' })
   })
 
   it('records form submits without their contents', async () => {

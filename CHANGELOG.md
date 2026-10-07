@@ -4,7 +4,7 @@
 
 ### Added
 
-- **Click and form submit autocapture.** With `autocapture` on, a click on a link, button or other interactive element, and a form submit, is tracked as `$autocapture` with the element's tag, visible text, link target, `id`, `name`, `role`, `type`, `aria-label`, classes, `data-*` attributes and a short selector. Typed values are never recorded, text that looks like a card or social security number is dropped, and `dx-no-capture` (or `data-dx-no-capture`) skips an element and everything inside it. `data-dx-capture` records clicks on an element that is not otherwise interactive. It is on wherever `autocapture` is already on; pass `{ clicks: false }` to keep only page views and page leaves.
+- **Click and form submit autocapture.** With `autocapture` on, a click on a link, button or other interactive element, and a form submit, is tracked as `$autocapture` with the element's tag, visible text, link target, `id`, `name`, `role`, `type`, `aria-label`, classes, `data-*` attributes and a short selector. Typed values are never recorded, any recorded text that looks like a card or social security number (visible text, button values, `aria-label`, `title`, `name`, `data-*` values) is dropped, and `dx-no-capture` (or `data-dx-no-capture`) skips an element and everything inside it. `data-dx-capture` records clicks on an element that is not otherwise interactive. It is on wherever `autocapture` is already on; pass `{ clicks: false }` to keep only page views and page leaves.
 
 ## 0.14.0
 
