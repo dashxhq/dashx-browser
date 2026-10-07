@@ -57,23 +57,23 @@ DashX.startAutocapture()
 DashX.stopAutocapture()
 ```
 
-Three events are captured:
+Up to three events are captured:
 
 | Event | When | Data |
 | --- | --- | --- |
 | `$pageview` | On load and on every client-side navigation (`pushState`, `replaceState`, back/forward, `#/` hash-router routes) | `url`, `path`, `referrer`, `title` |
 | `$pageleave` | When the visitor navigates to another page or the tab is hidden or closed | `url`, `path`, `referrer`, `title`, `durationMs` |
-| `$autocapture` | On a click on a link, button or other interactive element, and on a form submit | `eventType` (`click` or `submit`), `tagName`, `text`, `href`, `elementId`, `name`, `role`, `type`, `ariaLabel`, `classes`, `dataAttributes`, `selector`, `path` |
+| `$autocapture` | Only with `clicks: true`: on a click on a link, button or other interactive element, and on a form submit | `eventType` (`click` or `submit`), `tagName`, `text`, `href`, `elementId`, `name`, `role`, `type`, `ariaLabel`, `classes`, `dataAttributes`, `selector`, `path` |
 
-A change to only the query string or an in-page anchor is not a new page. A page view is recorded 300ms after the navigation, so `title` is the new route's. Pass `{ pageviews: false }`, `{ pageleave: false }` or `{ clicks: false }` instead of `true` to turn any of them off:
+A change to only the query string or an in-page anchor is not a new page. A page view is recorded 300ms after the navigation, so `title` is the new route's. `autocapture: true` captures page views and page leaves. Pass an object instead to choose: `{ clicks: true }` adds clicks and form submits, and `{ pageviews: false }` or `{ pageleave: false }` turns either page event off:
 
 ```js
-DashX.configure({ ..., autocapture: { clicks: false } })
+DashX.configure({ ..., autocapture: { clicks: true } })
 ```
 
 #### Clicks
 
-A click is credited to the nearest link, button, `summary`, button-like input, checkbox, radio, or element with an interactive `role` (`button`, `link`, `tab`, `menuitem` and similar) around what was clicked. Clicks on anything else are ignored; add `data-dx-capture` to an element to record clicks on it anyway. `text` is the element's visible text, up to 255 characters; icon-only elements have none and are named by `aria-label` (or `title`). `selector` is the element and up to four of its ancestors, for telling apart elements with the same text.
+Click capture is off unless `clicks: true` is passed. A click is credited to the nearest link, button, `summary`, button-like input, checkbox, radio, or element with an interactive `role` (`button`, `link`, `tab`, `menuitem` and similar) around what was clicked. Clicks on anything else are ignored; add `data-dx-capture` to an element to record clicks on it anyway. `text` is the element's visible text, up to 255 characters; icon-only elements have none and are named by `aria-label` (or `title`). `selector` is the element and up to four of its ancestors, for telling apart elements with the same text.
 
 What was typed is never recorded: an input contributes its value only when it is a button's label, and form submits carry the form's `id`, `name` and `selector`, not its fields. Any recorded text that looks like a card number or social security number is dropped, whether it is visible text, a button's value, `aria-label`, `title`, `name` or a `data-*` value. Add the `dx-no-capture` class or a `data-dx-no-capture` attribute to an element to skip it and everything inside it:
 

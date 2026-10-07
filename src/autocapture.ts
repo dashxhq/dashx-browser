@@ -71,7 +71,7 @@ export function startAutocapture(
 ): RunningAutocapture {
   const pageviews = options.pageviews ?? true
   const pageleave = options.pageleave ?? true
-  const clicks = options.clicks ?? true
+  const clicks = options.clicks ?? false
 
   let page = pageContext(document.referrer, maskUrl)
   let key = pageKey(window.location)

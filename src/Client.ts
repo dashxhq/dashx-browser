@@ -62,7 +62,6 @@ import type {
   LoadAiAgentQuery,
   SendInAppChatMessageMutation,
   SystemContextInput,
-  TrackEventInput,
   TrackMessageInput,
 } from './generated'
 import { createLogger } from './logging'
@@ -119,7 +118,7 @@ type ClientParams = {
   targetEnvironment: string,
   targetProduct?: string,
   targetVersion?: string,
-  // Opt-in: `true` captures page views, page leaves, and clicks and form submits.
+  // Opt-in: `true` captures page views and page leaves; `{ clicks: true }` adds clicks and form submits.
   autocapture?: boolean | AutocaptureOptions,
   // Masks ad-click ids (`gclid`, `fbclid`, ...) in captured URLs and referrers.
   maskPersonalDataProperties?: boolean,
@@ -751,10 +750,10 @@ class Client {
   }
 
   // Resolves once the event has been sent; failures are logged, never thrown.
-  track(event: string, data?: Pick<TrackEventInput, 'data'>): Promise<void> {
+  track(event: string, data?: Record<string, any>): Promise<void> {
     const queued = runBeforeSend<QueuedEvent>({
       event,
-      data: data as QueuedEvent['data'],
+      data,
       accountUid: this.#accountUid,
       accountAnonymousUid: this.#accountAnonymousUid,
       timestamp: new Date().toISOString(),

@@ -20,7 +20,7 @@ function clicks(): QueuedEvent[] {
   return sentEvents().filter((event) => event.event === '$autocapture')
 }
 
-function makeClient(autocapture: ClientParams['autocapture'] = true, params: Partial<ClientParams> = {}): Client {
+function makeClient(autocapture: ClientParams['autocapture'] = { clicks: true }, params: Partial<ClientParams> = {}): Client {
   const client = new Client({ publicKey: 'pk_test', targetEnvironment: 'test', autocapture, ...params })
   clients.push(client)
   return client
@@ -87,7 +87,7 @@ describe('click autocapture', () => {
 
   it('records links with their masked target', async () => {
     render('<a href="/pricing?gclid=abc&plan=pro">Pricing</a>')
-    makeClient(true, { maskPersonalDataProperties: true })
+    makeClient({ clicks: true }, { maskPersonalDataProperties: true })
     click('a')
     await flushTimers()
 
@@ -224,22 +224,25 @@ describe('click autocapture', () => {
     expect(clicks()[0].data).toMatchObject({ tagName: 'button', elementId: 'inner', text: 'Inside' })
   })
 
-  it('is off with clicks: false and after stopAutocapture', async () => {
+  it('is off with autocapture: true, clicks: false and after stopAutocapture', async () => {
     render('<button id="go">Go</button>')
+    makeClient(true)
+    click('#go')
     const client = makeClient({ clicks: false })
     click('#go')
     client.stopAutocapture()
-    client.startAutocapture()
+    client.startAutocapture({ clicks: true })
     client.stopAutocapture()
     click('#go')
     await flushTimers()
 
     expect(clicks()).toEqual([])
+    expect(sentEvents().map((event) => event.event)).toContain('$pageview')
   })
 
   it('lets beforeSend drop clicks', async () => {
     render('<button id="go">Go</button>')
-    makeClient(true, { beforeSend: (event) => (event.event === '$autocapture' ? null : event) })
+    makeClient({ clicks: true }, { beforeSend: (event) => (event.event === '$autocapture' ? null : event) })
     click('#go')
     await flushTimers()
 

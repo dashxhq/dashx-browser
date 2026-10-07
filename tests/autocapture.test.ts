@@ -226,10 +226,11 @@ describe('track', () => {
     await flushTimers()
     const { sessionId } = sentEvents()[0].systemContext
 
-    await client.track('Signed Up', { data: { plan: 'pro' } })
+    await client.track('Signed Up', { plan: 'pro' })
 
     const tracked = sentEvents()[1]
     expect(tracked.event).toBe('Signed Up')
+    expect(tracked.data).toEqual({ plan: 'pro' })
     expect(tracked.systemContext.page).toMatchObject({ path: '/start', url: 'http://localhost:3000/start' })
     expect(tracked.systemContext.sessionId).toBe(sessionId)
   })
@@ -294,14 +295,14 @@ describe('track', () => {
     const keepalives = () => fetchMock.mock.calls.map(([ , init ]) => init.keepalive)
 
     for (const event of [ 'A', 'B', 'C' ]) {
-      void client.track(event, { data: { blob } })
+      void client.track(event, { blob })
       await vi.advanceTimersByTimeAsync(0)
     }
     expect(keepalives()).toEqual([ true, true, false ])
 
     settle[0]()
     await vi.advanceTimersByTimeAsync(0)
-    void client.track('D', { data: { blob } })
+    void client.track('D', { blob })
     await vi.advanceTimersByTimeAsync(0)
     expect(keepalives()).toEqual([ true, true, false, true ])
   })
@@ -325,7 +326,7 @@ describe('track', () => {
   it('drops keepalive when the payload is too large for it', async () => {
     const client = makeClient(false)
 
-    await client.track('Upload', { blob: 'x'.repeat(70 * 1024) } as never)
+    await client.track('Upload', { blob: 'x'.repeat(70 * 1024) })
 
     expect(sent()[0].init.keepalive).toBe(false)
   })
