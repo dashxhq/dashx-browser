@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`loadInAppChatAgent({ identityId })`** returns the AI agent answering an InApp Chat identity — its name, avatar, welcome messages (`starterMessages`) and quick replies (`starterSuggestions`) — so a chat can greet the visitor and offer quick replies before the first message, as the web embed widget does. Missing lists come back empty. Requires an API with the `loadInAppChatAgent` query.
+
 ## 0.13.1
 
 ### Added

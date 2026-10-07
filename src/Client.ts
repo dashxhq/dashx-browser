@@ -21,6 +21,7 @@ import {
   FetchCartDocument,
   FetchContactsDocument,
   FetchInAppChatConversationDocument,
+  LoadInAppChatAgentDocument,
   FetchInAppChatConversationsDocument,
   FetchInAppChatMessagesDocument,
   FetchInAppMessagesAggregateDocument,
@@ -242,6 +243,21 @@ type SummarizeInAppChatConversationsArgs = {
 type FetchInAppChatConversationArgs = {
   identityId: string,
   conversationId: string,
+}
+
+type LoadInAppChatAgentArgs = {
+  identityId: string,
+}
+
+// The AI agent answering a chat identity, with the welcome messages and quick replies to show
+// before the visitor's first message.
+type InAppChatAgent = {
+  id: string,
+  name: string,
+  avatar?: string | null,
+  starterMessages: AiAgentStarterMessage[],
+  starterSuggestions: AiAgentStarterSuggestion[],
+  showStarterSuggestionLabel: boolean,
 }
 
 type SummarizeInAppChatMessagesArgs = {
@@ -2146,6 +2162,21 @@ class Client {
     return response.data!.summarizeInAppChatConversations
   }
 
+  async loadInAppChatAgent(args: LoadInAppChatAgentArgs): Promise<InAppChatAgent> {
+    const response = await this.graphqlClient
+      .query({
+        query: LoadInAppChatAgentDocument,
+        variables: args,
+        fetchPolicy: 'network-only',
+      })
+    const agent = response.data!.loadInAppChatAgent
+    return {
+      ...agent,
+      starterMessages: (agent.starterMessages ?? []) as AiAgentStarterMessage[],
+      starterSuggestions: (agent.starterSuggestions ?? []) as AiAgentStarterSuggestion[],
+    }
+  }
+
   // Single summary for direct load / hard reload of a conversation URL (history
   // alone can't rebuild the context strip — the message fetch omits metadata).
   async fetchInAppChatConversation(args: FetchInAppChatConversationArgs): Promise<ChatConversationSummary> {
@@ -2497,4 +2528,4 @@ class Client {
 
 export default Client
 export { WebsocketMessage, isTerminalCloseCode, TERMINAL_CLOSE_CODE_MIN, TERMINAL_CLOSE_CODE_MAX }
-export type { ClientParams, InAppMessages, WebsocketMessageType, InAppMessageData, InAppChatMessageData, SendInAppChatMessageArgs, FetchInAppChatMessagesArgs, ChatStatus, LastSenderKind, ChatConversationContext, ChatConversationTopic, AssignedGroupSummary, ChatConversationSummary, ChatIssuePropertyValue, FetchInAppChatConversationsArgs, SummarizeInAppChatConversationsArgs, FetchInAppChatConversationArgs, SummarizeInAppChatMessagesArgs, SummarizeInAppChatUnreadArgs, MarkInAppChatConversationReadArgs, ResolveInAppChatConversationArgs, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiNotification, AiAgentStarterMessage, AiAgentStarterSuggestion, DashXPushPayload, FirebaseMessaging, SubscribeOptions }
+export type { ClientParams, InAppMessages, WebsocketMessageType, InAppMessageData, InAppChatMessageData, SendInAppChatMessageArgs, FetchInAppChatMessagesArgs, ChatStatus, LastSenderKind, ChatConversationContext, ChatConversationTopic, AssignedGroupSummary, ChatConversationSummary, ChatIssuePropertyValue, FetchInAppChatConversationsArgs, SummarizeInAppChatConversationsArgs, FetchInAppChatConversationArgs, LoadInAppChatAgentArgs, InAppChatAgent, SummarizeInAppChatMessagesArgs, SummarizeInAppChatUnreadArgs, MarkInAppChatConversationReadArgs, ResolveInAppChatConversationArgs, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiNotification, AiAgentStarterMessage, AiAgentStarterSuggestion, DashXPushPayload, FirebaseMessaging, SubscribeOptions }
