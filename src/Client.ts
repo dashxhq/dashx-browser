@@ -119,7 +119,7 @@ type ClientParams = {
   targetEnvironment: string,
   targetProduct?: string,
   targetVersion?: string,
-  // Opt-in: `true` captures page views and page leaves.
+  // Opt-in: `true` captures page views, page leaves, and clicks and form submits.
   autocapture?: boolean | AutocaptureOptions,
   // Masks ad-click ids (`gclid`, `fbclid`, ...) in captured URLs and referrers.
   maskPersonalDataProperties?: boolean,
