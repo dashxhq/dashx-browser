@@ -1,8 +1,11 @@
+import { describeClick, describeSubmit } from './elements'
+import type { ElementData } from './elements'
 import type { PageContext } from './EventQueue'
 
 export type AutocaptureOptions = {
   pageviews?: boolean,
   pageleave?: boolean,
+  clicks?: boolean,
 }
 
 export type Capture = (_event: string, _data: Record<string, unknown>, _page: PageContext) => void
@@ -17,6 +20,8 @@ export type RunningAutocapture = {
 export const PAGEVIEW_EVENT = '$pageview'
 
 export const PAGELEAVE_EVENT = '$pageleave'
+
+export const AUTOCAPTURE_EVENT = '$autocapture'
 
 const LOCATION_CHANGE_EVENT = 'dashx:locationchange'
 
@@ -66,6 +71,7 @@ export function startAutocapture(
 ): RunningAutocapture {
   const pageviews = options.pageviews ?? true
   const pageleave = options.pageleave ?? true
+  const clicks = options.clicks ?? false
 
   let page = pageContext(document.referrer, maskUrl)
   let key = pageKey(window.location)
@@ -109,6 +115,26 @@ export function startAutocapture(
     view()
   }
 
+  // A query-string change is not a new page, so `page` still holds the URL from before it.
+  const currentPage = (): PageContext => ({
+    ...page,
+    url: maskUrl(window.location.href),
+    path: window.location.pathname,
+    title: document.title || null,
+  })
+
+  // A click right after a navigation must not land before that page's view.
+  const captureElement = (element: ElementData | null) => {
+    if (!element) return
+    flushPendingView()
+    const current = currentPage()
+    capture(AUTOCAPTURE_EVENT, { ...element, path: current.path }, current)
+  }
+
+  const onClick = (event: MouseEvent) => captureElement(describeClick(event, maskUrl))
+
+  const onSubmit = (event: SubmitEvent) => captureElement(describeSubmit(event, maskUrl))
+
   const onPageHide = () => {
     leave()
     flush()
@@ -132,6 +158,10 @@ export function startAutocapture(
   window.addEventListener('pagehide', onPageHide)
   window.addEventListener('pageshow', onPageShow)
   document.addEventListener('visibilitychange', onVisibilityChange)
+  if (clicks) {
+    document.addEventListener('click', onClick, { capture: true, passive: true })
+    document.addEventListener('submit', onSubmit, { capture: true, passive: true })
+  }
 
   view()
 
@@ -147,13 +177,9 @@ export function startAutocapture(
       window.removeEventListener('pagehide', onPageHide)
       window.removeEventListener('pageshow', onPageShow)
       document.removeEventListener('visibilitychange', onVisibilityChange)
+      document.removeEventListener('click', onClick, { capture: true })
+      document.removeEventListener('submit', onSubmit, { capture: true })
     },
-    // A query-string change is not a new page, so `page` still holds the URL from before it.
-    currentPage: () => ({
-      ...page,
-      url: maskUrl(window.location.href),
-      path: window.location.pathname,
-      title: document.title || null,
-    }),
+    currentPage,
   }
 }
