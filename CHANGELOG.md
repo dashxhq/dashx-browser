@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **A session lasts at most 24 hours.** A tab that stays active past that starts a new session, as it already did after 30 idle minutes, so a session's first page view is never more than a day before its other events.
+
 ## 0.14.1
 
 ### Added
