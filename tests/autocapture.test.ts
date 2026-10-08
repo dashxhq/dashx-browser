@@ -6,7 +6,13 @@ import DashX from '../src/index'
 import EventQueue, { FLUSH_INTERVAL_MS, MAX_BATCH_SIZE } from '../src/EventQueue'
 import type { QueuedEvent } from '../src/EventQueue'
 import { MASKED, maskQueryParams } from '../src/privacy'
-import { SESSION_IDLE_TIMEOUT_MS, campaignFromUrl, endSession, touchSession } from '../src/session'
+import {
+  SESSION_IDLE_TIMEOUT_MS,
+  SESSION_MAX_LENGTH_MS,
+  campaignFromUrl,
+  endSession,
+  touchSession,
+} from '../src/session'
 
 type SentRequest = { init: RequestInit, events: QueuedEvent[] }
 
@@ -466,6 +472,17 @@ describe('session', () => {
 
     const later = 1_000 + SESSION_IDLE_TIMEOUT_MS * 3
     expect(touchSession(later)).not.toBe(first)
+  })
+
+  it('starts a new session after 24 hours, however active it stays', () => {
+    const first = touchSession(1_000)
+    let now = 1_000
+    while (now < 1_000 + SESSION_MAX_LENGTH_MS - SESSION_IDLE_TIMEOUT_MS) {
+      now += SESSION_IDLE_TIMEOUT_MS - 1
+      expect(touchSession(now)).toBe(first)
+    }
+
+    expect(touchSession(1_000 + SESSION_MAX_LENGTH_MS)).not.toBe(first)
   })
 
   it('starts a new session after reset', () => {

@@ -87,7 +87,7 @@ Autocaptured events are sent in batches every 5 seconds or 20 events, and the la
 
 #### Sessions and campaigns
 
-Every event sent from the browser, autocaptured or with `DashX.track()`, carries `systemContext.page` and a `systemContext.sessionId`. A session ends after 30 minutes without a tracked event, and on `DashX.reset()`. It is shared across tabs of the same site.
+Every event sent from the browser, autocaptured or with `DashX.track()`, carries `systemContext.page` and a `systemContext.sessionId`. A session ends after 30 minutes without a tracked event, 24 hours after it started however active it stays, and on `DashX.reset()`. It is shared across tabs of the same site.
 
 `utm_source`, `utm_medium`, `utm_campaign`, `utm_term` and `utm_content` on the landing URL fill `systemContext.campaign` for every event in that session, including after client-side navigation drops them from the URL.
 

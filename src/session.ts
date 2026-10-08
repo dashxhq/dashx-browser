@@ -5,6 +5,9 @@ import { getItem, setItem } from './storage'
 
 export const SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000
 
+// Analytics looks back this far for a session's first page view, so no session may run longer.
+export const SESSION_MAX_LENGTH_MS = 24 * 60 * 60 * 1000
+
 const UTM_FIELDS = {
   utm_campaign: 'name',
   utm_source: 'source',
@@ -17,18 +20,25 @@ type SessionCampaign = { sessionId: string, campaign: SystemContextCampaignInput
 
 // Storage is shared across tabs so one visit spanning tabs stays one session; the in-memory copy
 // keeps a stable id where storage is unavailable (SSR, sandboxed iframes).
-let current: { id: string, lastActivityAt: number } | null = null
+let current: { id: string, startedAt: number, lastActivityAt: number } | null = null
 
 let currentCampaign: SessionCampaign | null = null
 
 export function touchSession(now: number = Date.now()): string {
   const id = getItem('sessionId') ?? current?.id
+  // A session from an SDK version that didn't record its start is timed from now.
+  const startedAt = getItem('sessionStartedAt') ?? current?.startedAt ?? now
   const lastActivityAt = getItem('sessionLastActivityAt') ?? current?.lastActivityAt
-  const isActive = id != null && lastActivityAt != null && now - lastActivityAt < SESSION_IDLE_TIMEOUT_MS
+  const isActive = id != null
+    && lastActivityAt != null
+    && now - lastActivityAt < SESSION_IDLE_TIMEOUT_MS
+    && now - startedAt < SESSION_MAX_LENGTH_MS
   const sessionId = isActive ? id : uuid()
+  const sessionStartedAt = isActive ? startedAt : now
 
-  current = { id: sessionId, lastActivityAt: now }
+  current = { id: sessionId, startedAt: sessionStartedAt, lastActivityAt: now }
   setItem('sessionId', sessionId)
+  setItem('sessionStartedAt', sessionStartedAt)
   setItem('sessionLastActivityAt', now)
   return sessionId
 }
@@ -37,6 +47,7 @@ export function endSession(): void {
   current = null
   currentCampaign = null
   setItem('sessionId', null)
+  setItem('sessionStartedAt', null)
   setItem('sessionLastActivityAt', null)
   setItem('sessionCampaign', null)
 }

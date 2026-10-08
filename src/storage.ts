@@ -6,6 +6,7 @@ type PersistedData = {
   identityToken: string | null,
   fcmToken: string | null,
   sessionId: string | null,
+  sessionStartedAt: number | null,
   sessionLastActivityAt: number | null,
   sessionCampaign: { sessionId: string, campaign: SystemContextCampaignInput } | null,
 }
