@@ -401,6 +401,22 @@ describe('privacy', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('drops an event without a name, sending the rest of its batch', async () => {
+    const client = makeClient(false, {
+      beforeSend: (event) => (event.event === 'Renamed' ? { ...event, event: undefined as any } : event),
+    })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await Promise.all([
+      client.track(undefined as any),
+      client.track('  '),
+      client.track('Renamed'),
+      client.track('Signed Up'),
+    ])
+
+    expect(sentEvents().map((e) => e.event)).toEqual([ 'Signed Up' ])
+  })
+
   it('lets beforeSend drop a track() call before it is sent', async () => {
     const client = makeClient(false, { beforeSend: (event) => (event.event === 'Secret' ? null : event) })
 

@@ -1,4 +1,7 @@
 import type { SystemContextInput, SystemContextPageInput } from './generated'
+import { createLogger } from './logging'
+
+const logger = createLogger('EVENTS')
 
 // The API accepts up to 100 per call; 20 keeps a batch well inside the 64KB keepalive budget.
 export const MAX_BATCH_SIZE = 20
@@ -35,7 +38,13 @@ export default class EventQueue {
     return this.#events.length
   }
 
+  // The API rejects a whole batch over one event without a name, losing the rest with it.
   enqueue(event: QueuedEvent): void {
+    if (typeof event.event !== 'string' || !event.event.trim()) {
+      logger.error('An event needs a name; this one was dropped:', event.event)
+      return
+    }
+
     this.#events.push(event)
 
     if (this.#events.length >= MAX_BATCH_SIZE) {

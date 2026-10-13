@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **An event without a name is dropped on its own instead of losing the events sent with it.** `track()` called with a missing or blank name, or a `beforeSend` hook that removes the name, logs an error and skips that event. The API rejects a whole batch over one unnamed event, so it used to take the page views and clicks queued beside it down too.
+
 ## 0.14.3
 
 ### Changed
