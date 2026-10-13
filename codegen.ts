@@ -22,6 +22,19 @@ const config: CodegenConfig = {
         omitObjectTypes: true,
       },
     },
+    './src/generated/inputShapes.ts': {
+      plugins: [
+        {
+          add: {
+            content: '/* eslint-disable max-len */',
+          },
+        },
+        './codegen/inputShapes.cjs',
+      ],
+      config: {
+        inputs: [ 'TrackedEventInput' ],
+      },
+    },
   },
 }
 
