@@ -455,6 +455,50 @@ describe('malformed events', () => {
     expect(sentEvents().map((e) => e.event)).toEqual([ 'Signed Up' ])
   })
 
+  it('drops an event whose context beforeSend leaves malformed', async () => {
+    const broken: Record<string, (_context: any) => any> = {
+      'No IP': ({ ipV4: _ipV4, ...context }) => context,
+      'Bad Page': (context) => ({ ...context, page: { ...context.page, url: 5 } }),
+      'Bad Session': (context) => ({ ...context, sessionId: 42 }),
+      'Bad Screen': (context) => ({ ...context, screen: { ...context.screen, width: 1.5 } }),
+      'Bad Location': (context) => ({ ...context, location: { latitude: 'north' } }),
+    }
+    const client = makeClient(false, {
+      beforeSend: (event) => ({
+        ...event,
+        systemContext: broken[event.event]?.(event.systemContext) ?? event.systemContext,
+      }),
+    })
+
+    await Promise.all([ ...Object.keys(broken), 'Signed Up' ].map((name) => client.track(name)))
+
+    expect(sentEvents().map((e) => e.event)).toEqual([ 'Signed Up' ])
+    expect(console.error).toHaveBeenCalledTimes(Object.keys(broken).length)
+  })
+
+  it('leaves out context fields the API does not know, keeping the rest', async () => {
+    const client = makeClient(false, {
+      beforeSend: (event) => ({
+        ...event,
+        systemContext: {
+          ...event.systemContext,
+          custom: 1,
+          page: { ...event.systemContext.page!, extra: true },
+          location: { latitude: '12.97', longitude: 77.59 },
+        } as any,
+      }),
+    })
+
+    await client.track('Signed Up')
+
+    const { systemContext } = sentEvents()[0]
+    expect(systemContext).not.toHaveProperty('custom')
+    expect(systemContext.page).not.toHaveProperty('extra')
+    expect(systemContext.page).toMatchObject({ path: '/start', url: 'http://localhost:3000/start' })
+    expect(systemContext.location).toEqual({ latitude: '12.97', longitude: 77.59 })
+    expect(systemContext).toMatchObject({ ipV4: 'NA', locale: expect.any(String), timeZone: expect.any(String) })
+  })
+
   it('sends what beforeSend returns in the shape the API accepts', async () => {
     const client = makeClient(false, {
       beforeSend: (event) => ({ ...event, timestamp: new Date('2026-10-13T10:00:00+05:30'), extra: true }) as any,

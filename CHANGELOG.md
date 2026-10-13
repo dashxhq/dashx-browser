@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- **A malformed event is dropped on its own instead of losing the events sent with it.** The API rejects a whole batch over one bad event, so an event from `track()` or a `beforeSend` hook with a missing or blank name, `data` that is not an object or cannot be serialised as JSON, a non-string account uid, an unparseable `timestamp` or a non-object `systemContext` took the page views and clicks queued beside it down too. It is now logged as an error and skipped. Fields the API does not know are left out, and `timestamp` is sent as ISO 8601.
+- **A malformed event is dropped on its own instead of losing the events sent with it.** The API rejects a whole batch over one bad event, so an event from `track()` or a `beforeSend` hook with a missing or blank name, `data` that is not an object or cannot be serialised as JSON, a non-string account uid, an unparseable `timestamp`, or a `systemContext` missing a required field (`ipV4`, `locale`, `timeZone`, `userAgent`) or holding a value of the wrong type took the page views and clicks queued beside it down too. It is now logged as an error and skipped. Fields the API does not know, at any depth of `systemContext`, are left out, and `timestamp` is sent as ISO 8601.
 
 ## 0.14.3
 
