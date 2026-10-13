@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- **An event without a name is dropped on its own instead of losing the events sent with it.** `track()` called with a missing or blank name, or a `beforeSend` hook that removes the name, logs an error and skips that event. The API rejects a whole batch over one unnamed event, so it used to take the page views and clicks queued beside it down too.
+- **A malformed event is dropped on its own instead of losing the events sent with it.** The API rejects a whole batch over one bad event, so an event from `track()` or a `beforeSend` hook with a missing or blank name, `data` that is not an object or cannot be serialised as JSON, a non-string account uid, an unparseable `timestamp` or a non-object `systemContext` took the page views and clicks queued beside it down too. It is now logged as an error and skipped. Fields the API does not know are left out, and `timestamp` is sent as ISO 8601.
 
 ## 0.14.3
 

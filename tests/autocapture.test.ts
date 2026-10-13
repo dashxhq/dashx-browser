@@ -6,6 +6,7 @@ import DashX from '../src/index'
 import EventQueue, { FLUSH_INTERVAL_MS, MAX_BATCH_SIZE } from '../src/EventQueue'
 import type { QueuedEvent } from '../src/EventQueue'
 import { MASKED, maskQueryParams } from '../src/privacy'
+import type { CapturedEvent } from '../src/privacy'
 import {
   SESSION_IDLE_TIMEOUT_MS,
   SESSION_MAX_LENGTH_MS,
@@ -401,22 +402,6 @@ describe('privacy', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('drops an event without a name, sending the rest of its batch', async () => {
-    const client = makeClient(false, {
-      beforeSend: (event) => (event.event === 'Renamed' ? { ...event, event: undefined as any } : event),
-    })
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    await Promise.all([
-      client.track(undefined as any),
-      client.track('  '),
-      client.track('Renamed'),
-      client.track('Signed Up'),
-    ])
-
-    expect(sentEvents().map((e) => e.event)).toEqual([ 'Signed Up' ])
-  })
-
   it('lets beforeSend drop a track() call before it is sent', async () => {
     const client = makeClient(false, { beforeSend: (event) => (event.event === 'Secret' ? null : event) })
 
@@ -424,6 +409,62 @@ describe('privacy', () => {
     await client.track('Signed Up')
 
     expect(sentEvents().map((e) => e.event)).toEqual([ 'Signed Up' ])
+  })
+})
+
+describe('malformed events', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockClear().mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('drops each malformed track() call on its own, logging why, and sends the rest of its batch', async () => {
+    const circular: Record<string, unknown> = {}
+    circular.self = circular
+    const client = makeClient(false)
+
+    await Promise.all([
+      client.track(undefined as any),
+      client.track('  '),
+      client.track(42 as any),
+      client.track('List', [ 1 ] as any),
+      client.track('Text', 'text' as any),
+      client.track('Circular', circular),
+      client.track('Big', { n: BigInt(1) }),
+      client.track('Signed Up', { plan: 'pro' }),
+    ])
+
+    expect(sentEvents().map((e) => e.event)).toEqual([ 'Signed Up' ])
+    expect(console.error).toHaveBeenCalledTimes(7)
+  })
+
+  it('drops an event beforeSend leaves malformed, sending the rest of its batch', async () => {
+    const broken: Record<string, Partial<CapturedEvent>> = {
+      'No Name': { event: undefined as any },
+      'Bad Time': { timestamp: 'yesterday' },
+      'Bad Uid': { accountUid: 7 as any },
+      'Bad Context': { systemContext: 'context' as any },
+    }
+    const client = makeClient(false, { beforeSend: (event) => ({ ...event, ...broken[event.event] }) })
+
+    await Promise.all([ ...Object.keys(broken), 'Signed Up' ].map((name) => client.track(name)))
+
+    expect(sentEvents().map((e) => e.event)).toEqual([ 'Signed Up' ])
+  })
+
+  it('sends what beforeSend returns in the shape the API accepts', async () => {
+    const client = makeClient(false, {
+      beforeSend: (event) => ({ ...event, timestamp: new Date('2026-10-13T10:00:00+05:30'), extra: true }) as any,
+    })
+
+    await client.track('Signed Up')
+
+    const [ tracked ] = sentEvents()
+    expect(tracked.timestamp).toBe('2026-10-13T04:30:00.000Z')
+    expect(tracked).not.toHaveProperty('extra')
   })
 })
 

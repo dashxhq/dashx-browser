@@ -21,6 +21,39 @@ export type QueuedEvent = {
 
 export type SendEvents = (_events: QueuedEvent[], _options: { keepalive: boolean }) => Promise<void>
 
+const isObject = (value: unknown): boolean => typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const isOptionalString = (value: unknown): boolean => value == null || typeof value === 'string'
+
+// The API rejects a whole batch over one malformed event, losing the rest with it. The JSON round
+// trip proves the event serialises and snapshots data the caller may still mutate.
+function toSendable(event: QueuedEvent): QueuedEvent {
+  const { event: name, accountUid, accountAnonymousUid, data, timestamp, systemContext } = event
+  let json: string
+  try {
+    json = JSON.stringify({ event: name, accountUid, accountAnonymousUid, data, timestamp, systemContext })
+  } catch {
+    throw new Error('it cannot be serialised as JSON')
+  }
+  const sendable = JSON.parse(json)
+
+  if (typeof sendable.event !== 'string' || !sendable.event.trim()) throw new Error('it has no name')
+  if (!isOptionalString(sendable.accountUid) || !isOptionalString(sendable.accountAnonymousUid)) {
+    throw new Error('account uids must be strings')
+  }
+  if (sendable.data != null && !isObject(sendable.data)) throw new Error('data must be an object')
+  if (sendable.systemContext != null && !isObject(sendable.systemContext)) throw new Error('systemContext must be an object')
+
+  if (sendable.timestamp != null) {
+    const time = typeof sendable.timestamp === 'string' ? Date.parse(sendable.timestamp) : NaN
+    if (Number.isNaN(time)) throw new Error('timestamp must be a date')
+    // The API only parses ISO 8601; Date.parse also takes looser formats.
+    sendable.timestamp = new Date(time).toISOString()
+  }
+
+  return sendable
+}
+
 export default class EventQueue {
   #events: QueuedEvent[] = []
 
@@ -38,20 +71,24 @@ export default class EventQueue {
     return this.#events.length
   }
 
-  // The API rejects a whole batch over one event without a name, losing the rest with it.
-  enqueue(event: QueuedEvent): void {
-    if (typeof event.event !== 'string' || !event.event.trim()) {
-      logger.error('An event needs a name; this one was dropped:', event.event)
-      return
+  // Returns false when the event is malformed and was dropped.
+  enqueue(event: QueuedEvent): boolean {
+    let sendable: QueuedEvent
+    try {
+      sendable = toSendable(event)
+    } catch (error) {
+      logger.error(`The '${String(event.event)}' event was dropped because ${(error as Error).message}:`, event)
+      return false
     }
 
-    this.#events.push(event)
+    this.#events.push(sendable)
 
     if (this.#events.length >= MAX_BATCH_SIZE) {
       void this.flush()
     } else if (!this.#timer) {
       this.#timer = setTimeout(() => { void this.flush() }, FLUSH_INTERVAL_MS)
     }
+    return true
   }
 
   // Calls in the same tick share one request instead of each sending its own.
