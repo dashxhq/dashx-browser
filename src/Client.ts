@@ -765,7 +765,7 @@ class Client {
     if (!queued) return Promise.resolve()
 
     const queue = this.#ensureEventQueue()
-    queue.enqueue(queued)
+    if (!queue.enqueue(queued)) return Promise.resolve()
     // Sent now, not on the batch timer, so an event tracked just before a navigation still arrives.
     return queue.flushSoon({ keepalive: true })
   }
