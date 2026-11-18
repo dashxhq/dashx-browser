@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`identityTokenProvider` keeps a member online from your own app.** A client given a provider fetches its identity token from your backend before the socket connects, renews it about five minutes before it expires, and fetches one fresh token after the server refuses one (close code `4401`), reconnecting each time. A provider failure, or a fresh token refused too, stays terminal. Provided tokens are not stored, so they never replace another client's token on the page.
+
+### Fixed
+
+- **A new identity token reconnects the socket even when it is not open.** `setIdentity` with a new token used to reconnect only an open socket, so a socket closed for an expired token stayed closed, and one retrying a dropped connection kept retrying with the old token.
+
 ## 0.14.4
 
 ### Fixed

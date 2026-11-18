@@ -112,6 +112,34 @@ DashX.configure({
 
 `beforeSend` also accepts an array of functions, run in order; the first to return `null` drops the event, and a function that throws drops it too. It applies to `DashX.track()` too.
 
+### Keeping a member online from your app
+
+A workspace member working in your own app can count as online for DashX auto-assignment, as an open DashX tab does. Give a client an `identityTokenProvider` that fetches a member token from your backend, and connect its socket:
+
+```js
+import { Client } from '@dashx/browser'
+
+const member = new Client({
+  publicKey: 'YOUR_PUBLIC_KEY',
+  targetEnvironment: 'production',
+  identityTokenProvider: () => fetch('/dashx/member-token').then((response) => response.text()),
+})
+
+member.connectWebSocket()
+```
+
+The client calls the provider before it connects, again about five minutes before each token expires, and once more if the server refuses a token. A provider that throws, or a fresh token that is refused too, leaves the socket closed. Provided tokens are never stored, so the member's client and an end user's client on the same page keep their own.
+
+Your backend mints the token with the key pair's private key, which must never reach the browser. Either call the `generateIdentityToken` query with `kind: MEMBER` and `uid` set to the member's account id or email (tokens last 12 hours), or sign an HS256 JWT yourself with the private key as the secret:
+
+```json
+{ "kind": "MEMBER", "uid": "<member account id>", "environment_id": "<that account's environment id>", "iat": 1700000000, "exp": 1700043200 }
+```
+
+`exp` must be after `iat` and at most 24 hours later. A member token keeps that member online and grants nothing beyond the public key: it does not sign the member in or reach their inbox. A page that also needs an end user's identity uses a second client for it.
+
+Without a provider, set a new token with `setIdentity(undefined, token)` before the current one expires; the client reconnects with it.
+
 ## Contributing
 
 - Make sure all the dependencies are installed:
