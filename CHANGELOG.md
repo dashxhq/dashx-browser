@@ -4,8 +4,8 @@
 
 ### Added
 
-- **`identityTokenProvider` keeps a member online from your own app.** A client given a provider fetches its identity token from your backend before the socket connects, renews it about five minutes before it expires, and fetches one fresh token after the server refuses one (close code `4401`), reconnecting each time. A provider failure, or a fresh token refused too, stays terminal. A client with a provider keeps its token, account uid and anonymous uid in memory only, so it never replaces or acts as the page's stored visitor.
-- **`connectWebSocket(options)`** takes the handlers and query parameters `createWebSocketConnection` does and keeps them across every reconnect the client makes, and `webSocketManager` returns the socket's current manager, so a framework provider can share the client's socket and its token renewal.
+- **`identityTokenProvider` keeps a member online from your own app.** A client given a provider fetches its identity token from your backend before the socket connects, renews it about five minutes before it expires, and fetches one fresh token after the server refuses one (close code `4401`), reconnecting each time. A provider failure, or a fresh token refused too, stays terminal and stops renewal until `connectWebSocket()` is called again. A client with a provider keeps its token, account uid and anonymous uid in memory only, so it never replaces or acts as the page's stored visitor.
+- **`connectWebSocket(options)`** takes the handlers and query parameters `createWebSocketConnection` does and keeps them across every reconnect the client makes, and `webSocketManager` returns the socket's current manager (both also on the `DashX` singleton), so a framework provider can share the client's socket and its token renewal.
 
 ### Fixed
 

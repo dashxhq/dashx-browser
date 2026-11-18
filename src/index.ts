@@ -148,7 +148,7 @@ const DashX = {
   subscribeToChannel(channelName: string, handler: (_message: InAppChatMessageData) => void, options?: { onReconnectAck?: () => void }) { return ensureConfigured().subscribeToChannel(channelName, handler, options) },
 
   // WebSocket
-  connectWebSocket() { return ensureConfigured().connectWebSocket() },
+  connectWebSocket(options?: ManagedWebSocketOptions) { return ensureConfigured().connectWebSocket(options) },
   disconnectWebSocket() { return ensureConfigured().disconnectWebSocket() },
   createWebSocketConnection(options?: Parameters<Client['createWebSocketConnection']>[0]) { return ensureConfigured().createWebSocketConnection(options) },
   registerWatchedQuery(refetch: () => void, name: string) { return ensureConfigured().registerWatchedQuery(refetch, name) },
@@ -159,6 +159,7 @@ const DashX = {
   get accountAnonymousUid() { return ensureConfigured().accountAnonymousUid },
   get identityToken() { return ensureConfigured().identityToken },
   get isWebSocketConnected() { return ensureConfigured().isWebSocketConnected },
+  get webSocketManager() { return ensureConfigured().webSocketManager },
   get graphqlClient() { return ensureConfigured().graphqlClient },
   get context() { return ensureConfigured().context },
 }

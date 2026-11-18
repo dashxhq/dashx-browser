@@ -171,10 +171,15 @@ describe('identityTokenProvider', () => {
     const sockets = FakeWebSocket.instances.length
     latestSocket().open()
     latestSocket().serverClose(4401)
-    await vi.advanceTimersByTimeAsync(60 * 1000)
+    await vi.advanceTimersByTimeAsync(24 * HOUR)
 
     expect(provider).toHaveBeenCalledTimes(2)
     expect(FakeWebSocket.instances).toHaveLength(sockets)
+
+    client.connectWebSocket()
+    await settle()
+    expect(provider).toHaveBeenCalledTimes(3)
+    expect(FakeWebSocket.instances).toHaveLength(sockets + 1)
     client.disconnectWebSocket()
   })
 
@@ -211,7 +216,7 @@ describe('identityTokenProvider', () => {
     const sockets = FakeWebSocket.instances.length
 
     latestSocket().serverClose(4401)
-    await vi.advanceTimersByTimeAsync(60 * 1000)
+    await vi.advanceTimersByTimeAsync(24 * HOUR)
 
     expect(provider).toHaveBeenCalledTimes(2)
     expect(FakeWebSocket.instances).toHaveLength(sockets)

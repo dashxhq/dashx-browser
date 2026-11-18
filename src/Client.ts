@@ -2183,11 +2183,19 @@ class Client {
 
     if (this.#refreshedAfterUnauthorized) {
       this.logger.error('A freshly provided identity token was refused too; not retrying')
+      this.#stopManagedWebSocketRetries()
       return
     }
 
     this.#refreshedAfterUnauthorized = true
     this.#refreshIdentityToken()
+  }
+
+  // Terminal until the host calls `connectWebSocket()` again: a renewal timer left armed would
+  // otherwise fetch a token and reopen the socket hours later.
+  #stopManagedWebSocketRetries(): void {
+    this.#websocketRequested = false
+    this.#clearIdentityTokenRenewal()
   }
 
   #identityTokenUsable(): boolean {
@@ -2216,7 +2224,9 @@ class Client {
       })
       .catch((error) => {
         this.logger.error('Identity token provider failed:', error)
-        if (retryWhileUsable && this.#websocketRequested && this.#identityTokenUsable()) {
+        if (!retryWhileUsable) {
+          this.#stopManagedWebSocketRetries()
+        } else if (this.#websocketRequested && this.#identityTokenUsable()) {
           this.#scheduleIdentityTokenRenewal(IDENTITY_TOKEN_RENEW_RETRY_MS)
         }
       })
