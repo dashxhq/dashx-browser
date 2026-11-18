@@ -29,12 +29,23 @@ class FakeWebSocket {
     return new URL(this.url).searchParams.get('identityToken')
   }
 
+  sent: Record<string, any>[] = []
+
   open(): void {
     this.readyState = FakeWebSocket.OPEN
     this.onopen?.(new Event('open'))
   }
 
+  // What the server does for a token it accepts; it refuses one by opening and then closing 4401.
+  accept(): void {
+    this.open()
+    this.onmessage?.({
+      data: JSON.stringify({ type: 'CONNECTED', data: { connectionId: 'connection' } }),
+    } as MessageEvent)
+  }
+
   send(data: string): void {
+    this.sent.push(JSON.parse(data))
     if (JSON.parse(data).type === 'PING') {
       this.onmessage?.({ data: JSON.stringify({ type: 'PONG' }) } as MessageEvent)
     }
@@ -117,7 +128,7 @@ describe('identityTokenProvider', () => {
     client.connectWebSocket()
     await settle()
     const first = latestSocket()
-    first.open()
+    first.accept()
 
     await vi.advanceTimersByTimeAsync(12 * HOUR - 6 * 60 * 1000)
     expect(provider).toHaveBeenCalledTimes(1)
@@ -136,7 +147,7 @@ describe('identityTokenProvider', () => {
     const client = makeClient(provider)
     client.connectWebSocket()
     await settle()
-    latestSocket().open()
+    latestSocket().accept()
 
     latestSocket().serverClose(4401)
     await settle()
@@ -149,18 +160,42 @@ describe('identityTokenProvider', () => {
   it('stops when a freshly provided token is refused too', async () => {
     const provider = vi.fn().mockResolvedValue(token('refused', 12 * HOUR))
     const client = makeClient(provider)
+    vi.spyOn((client as any).logger, 'error').mockImplementation(() => {})
+    vi.spyOn((client as any).logger, 'warn').mockImplementation(() => {})
     client.connectWebSocket()
     await settle()
-    latestSocket().open()
 
+    latestSocket().open()
     latestSocket().serverClose(4401)
     await settle()
     const sockets = FakeWebSocket.instances.length
+    latestSocket().open()
     latestSocket().serverClose(4401)
     await vi.advanceTimersByTimeAsync(60 * 1000)
 
     expect(provider).toHaveBeenCalledTimes(2)
     expect(FakeWebSocket.instances).toHaveLength(sockets)
+    client.disconnectWebSocket()
+  })
+
+  it('refreshes again for a later refusal once a fresh token was accepted', async () => {
+    const provider = vi.fn()
+      .mockResolvedValueOnce(token('first', 12 * HOUR))
+      .mockResolvedValueOnce(token('second', 12 * HOUR))
+      .mockResolvedValueOnce(token('third', 12 * HOUR))
+    const client = makeClient(provider)
+    client.connectWebSocket()
+    await settle()
+    latestSocket().accept()
+
+    latestSocket().serverClose(4401)
+    await settle()
+    latestSocket().accept()
+    latestSocket().serverClose(4401)
+    await settle()
+
+    expect(provider).toHaveBeenCalledTimes(3)
+    expect(latestSocket().identityToken).toContain('third')
     client.disconnectWebSocket()
   })
 
@@ -172,7 +207,7 @@ describe('identityTokenProvider', () => {
     vi.spyOn((client as any).logger, 'error').mockImplementation(() => {})
     client.connectWebSocket()
     await settle()
-    latestSocket().open()
+    latestSocket().accept()
     const sockets = FakeWebSocket.instances.length
 
     latestSocket().serverClose(4401)
@@ -192,7 +227,7 @@ describe('identityTokenProvider', () => {
     vi.spyOn((client as any).logger, 'error').mockImplementation(() => {})
     client.connectWebSocket()
     await settle()
-    latestSocket().open()
+    latestSocket().accept()
 
     await vi.advanceTimersByTimeAsync(12 * HOUR - 5 * 60 * 1000)
     expect(provider).toHaveBeenCalledTimes(2)
@@ -200,6 +235,59 @@ describe('identityTokenProvider', () => {
     await vi.advanceTimersByTimeAsync(30 * 1000)
     expect(provider).toHaveBeenCalledTimes(3)
     expect(latestSocket().identityToken).toContain('second')
+    client.disconnectWebSocket()
+  })
+})
+
+describe('the managed socket', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.stubGlobal('WebSocket', FakeWebSocket)
+    FakeWebSocket.instances = []
+    window.localStorage.clear()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('sends the public key and target environment in the handshake', () => {
+    const client = makeClient()
+    client.connectWebSocket({ queryParams: { custom: 'value' } })
+
+    const params = new URL(latestSocket().url).searchParams
+    expect(params.get('publicKey')).toBe('pk_test')
+    expect(params.get('targetEnvironment')).toBe('test')
+    expect(params.get('custom')).toBe('value')
+    client.disconnectWebSocket()
+  })
+
+  it('keeps its handlers across a reconnect for a new token, without the old socket\'s events', async () => {
+    const onOpen = vi.fn()
+    const onClose = vi.fn()
+    const onMessage = vi.fn()
+    const provider = vi.fn()
+      .mockResolvedValueOnce(token('first', 12 * HOUR))
+      .mockResolvedValueOnce(token('second', 12 * HOUR))
+    const client = makeClient(provider)
+    client.connectWebSocket({ onOpen, onClose, onMessage })
+    await settle()
+    const first = latestSocket()
+    first.accept()
+
+    first.serverClose(4401)
+    await settle()
+    expect(onClose).toHaveBeenCalledTimes(1)
+    latestSocket().accept()
+
+    expect(client.webSocketManager?.isConnected).toBe(true)
+    expect(onOpen).toHaveBeenCalledTimes(2)
+    expect(onMessage).toHaveBeenCalledTimes(2)
+
+    first.onmessage?.({ data: JSON.stringify({ type: 'CONNECTED', data: {} }) } as MessageEvent)
+    expect(onMessage).toHaveBeenCalledTimes(2)
     client.disconnectWebSocket()
   })
 })
@@ -224,7 +312,7 @@ describe('without an identityTokenProvider', () => {
     vi.spyOn((client as any).logger, 'error').mockImplementation(() => {})
     client.setIdentity('member', token('host', HOUR))
     client.connectWebSocket()
-    latestSocket().open()
+    latestSocket().accept()
 
     latestSocket().serverClose(4401)
     await vi.advanceTimersByTimeAsync(60 * 1000)
@@ -239,7 +327,7 @@ describe('without an identityTokenProvider', () => {
     vi.spyOn((client as any).logger, 'error').mockImplementation(() => {})
     client.setIdentity('member', token('expired', HOUR))
     client.connectWebSocket()
-    latestSocket().open()
+    latestSocket().accept()
     latestSocket().serverClose(4401)
 
     client.setIdentity(undefined, token('renewed', 12 * HOUR))
@@ -270,6 +358,25 @@ describe('two clients on one page', () => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
+  })
+
+  it('keep the member\'s uids out of the page\'s stored visitor', async () => {
+    const user = makeClient()
+    user.setIdentity('visitor', 'user-token')
+    const storedAnonymousUid = user.accountAnonymousUid
+    const member = makeClient(vi.fn().mockResolvedValue(token('member', 12 * HOUR)))
+
+    expect(member.accountUid).toBeNull()
+    expect(member.accountAnonymousUid).not.toBe(storedAnonymousUid)
+    member.connectWebSocket()
+    await settle()
+    latestSocket().accept()
+
+    const subscribe = latestSocket().sent.find((message) => message.type === 'SUBSCRIBE')
+    expect(subscribe?.data.accountUid ?? null).toBeNull()
+    expect(readPersisted().accountUid).toBe('visitor')
+    expect(readPersisted().accountAnonymousUid).toBe(storedAnonymousUid)
+    member.disconnectWebSocket()
   })
 
   it('keep their own tokens', async () => {

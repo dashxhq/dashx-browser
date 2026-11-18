@@ -4,10 +4,12 @@
 
 ### Added
 
-- **`identityTokenProvider` keeps a member online from your own app.** A client given a provider fetches its identity token from your backend before the socket connects, renews it about five minutes before it expires, and fetches one fresh token after the server refuses one (close code `4401`), reconnecting each time. A provider failure, or a fresh token refused too, stays terminal. Provided tokens are not stored, so they never replace another client's token on the page.
+- **`identityTokenProvider` keeps a member online from your own app.** A client given a provider fetches its identity token from your backend before the socket connects, renews it about five minutes before it expires, and fetches one fresh token after the server refuses one (close code `4401`), reconnecting each time. A provider failure, or a fresh token refused too, stays terminal. A client with a provider keeps its token, account uid and anonymous uid in memory only, so it never replaces or acts as the page's stored visitor.
+- **`connectWebSocket(options)`** takes the handlers and query parameters `createWebSocketConnection` does and keeps them across every reconnect the client makes, and `webSocketManager` returns the socket's current manager, so a framework provider can share the client's socket and its token renewal.
 
 ### Fixed
 
+- **`connectWebSocket()` sends the public key and target environment.** The server requires the public key in the handshake, so the client-managed socket was refused without it.
 - **A new identity token reconnects the socket even when it is not open.** `setIdentity` with a new token used to reconnect only an open socket, so a socket closed for an expired token stayed closed, and one retrying a dropped connection kept retrying with the old token.
 
 ## 0.14.4

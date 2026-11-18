@@ -128,7 +128,9 @@ const member = new Client({
 member.connectWebSocket()
 ```
 
-The client calls the provider before it connects, again about five minutes before each token expires, and once more if the server refuses a token. A provider that throws, or a fresh token that is refused too, leaves the socket closed. Provided tokens are never stored, so the member's client and an end user's client on the same page keep their own.
+The client calls the provider before it connects, again about five minutes before each token expires, and once more if the server refuses a token. A provider that throws, or a fresh token that is refused too, leaves the socket closed. A client with a provider stores nothing about its identity: its token, account uid and anonymous uid stay in memory, so the member's client and an end user's client on the same page never mix them up.
+
+Renewal covers the socket opened with `connectWebSocket()`, which takes the same handlers and query parameters as `createWebSocketConnection()` and keeps them across every reconnect. A socket you create yourself with `createWebSocketConnection()` is yours to reconnect when the token changes.
 
 Your backend mints the token with the key pair's private key, which must never reach the browser. Either call the `generateIdentityToken` query with `kind: MEMBER` and `uid` set to the member's account id or email (tokens last 12 hours), or sign an HS256 JWT yourself with the private key as the secret:
 

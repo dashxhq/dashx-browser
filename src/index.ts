@@ -8,6 +8,8 @@ import Client, {
 import WebSocketManager, { ReadyState } from './WebSocketManager'
 import type {
   ClientParams,
+  ManagedWebSocketOptions,
+  WebSocketConnectionOptions,
   InAppMessages,
   WebsocketMessageType,
   InAppMessageData,
@@ -187,6 +189,8 @@ export type {
   ChatIssuePropertyValue,
   ChatStatus,
   ClientParams,
+  ManagedWebSocketOptions,
+  WebSocketConnectionOptions,
   ContactKind,
   ContactStatus,
   DashXPushPayload,
