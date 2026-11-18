@@ -128,7 +128,7 @@ const member = new Client({
 member.connectWebSocket()
 ```
 
-The client calls the provider before it connects, again about five minutes before each token expires, and once more if the server refuses a token. A provider that throws, or a fresh token that is refused too, leaves the socket closed and stops renewal until you call `connectWebSocket()` again, as does any other refusal (close codes 4400-4499). That call always fetches a fresh token. A client with a provider stores nothing about its identity: its token, account uid and anonymous uid stay in memory, so the member's client and an end user's client on the same page never mix them up.
+The client calls the provider before it connects, again about five minutes before each token expires, and once more if the server refuses a token. A provider that throws, or a fresh token that is refused too, leaves the socket closed and stops renewal until you call `connectWebSocket()` again, as does any other refusal (close codes 4400-4499). That call always fetches a fresh token. While the socket is connected, connecting or retrying, `isWebSocketActive` is true and `connectWebSocket()` does nothing, so calling it again never resets a retry backoff. A client with a provider stores nothing about its identity: its token, account uid and anonymous uid stay in memory, so the member's client and an end user's client on the same page never mix them up.
 
 Renewal covers the socket opened with `connectWebSocket()`, which takes the same handlers and query parameters as `createWebSocketConnection()` and keeps them across every reconnect. A socket you create yourself with `createWebSocketConnection()` is yours to reconnect when the token changes.
 

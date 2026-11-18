@@ -2099,15 +2099,16 @@ class Client {
 
   // WebSocket methods for real-time functionality
   // Handlers passed here replace earlier ones and survive every reconnect, including the ones the
-  // client makes itself for a new identity token.
+  // client makes itself for a new identity token. A no-op while the socket is active, so calling it
+  // again never resets a retrying socket's backoff; after a terminal close it starts over.
   connectWebSocket(options?: ManagedWebSocketOptions): void {
     if (options) {
       this.#managedWebSocketOptions = options
     }
-    this.#websocketRequested = true
-    if (this.#websocketManager?.isConnected) {
+    if (this.isWebSocketActive) {
       return
     }
+    this.#websocketRequested = true
 
     if (this.#identityTokenProvider && (this.#stoppedTerminally || !this.#identityTokenUsable())) {
       // A restart never reuses the refused token, and counts as the refresh: a refusal of the fresh
@@ -2283,6 +2284,15 @@ class Client {
 
   get webSocketManager(): WebSocketManager | null {
     return this.#websocketManager
+  }
+
+  // Connected, connecting, retrying or fetching a token; false once closed for good.
+  get isWebSocketActive(): boolean {
+    if (!this.#websocketRequested) {
+      return false
+    }
+    return Boolean(this.#identityTokenRefresh)
+      || (this.#websocketManager !== null && !this.#websocketManager.isStopped)
   }
 
   get isWebSocketConnected(): boolean {

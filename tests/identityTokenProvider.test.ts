@@ -199,6 +199,7 @@ describe('identityTokenProvider', () => {
     latestSocket().open()
     latestSocket().serverClose(4401)
     await settle()
+    expect(client.isWebSocketActive).toBe(false)
 
     client.connectWebSocket()
     await settle()
@@ -304,6 +305,42 @@ describe('the managed socket', () => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
+  })
+
+  it('ignores connectWebSocket() while a dropped socket is retrying, keeping its backoff', async () => {
+    const client = makeClient()
+    client.setIdentity('member', token('host', HOUR))
+    client.connectWebSocket()
+    latestSocket().accept()
+    const manager = client.webSocketManager
+
+    latestSocket().serverClose(1006)
+    expect(client.isWebSocketActive).toBe(true)
+    client.connectWebSocket()
+
+    expect(client.webSocketManager).toBe(manager)
+    expect(FakeWebSocket.instances).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(FakeWebSocket.instances).toHaveLength(2)
+    client.disconnectWebSocket()
+  })
+
+  it('starts over on connectWebSocket() after a terminal close', () => {
+    const client = makeClient()
+    vi.spyOn((client as any).logger, 'warn').mockImplementation(() => {})
+    vi.spyOn((client as any).logger, 'error').mockImplementation(() => {})
+    client.setIdentity('member', token('host', HOUR))
+    client.connectWebSocket()
+    latestSocket().accept()
+    const manager = client.webSocketManager
+
+    latestSocket().serverClose(4403)
+    expect(client.isWebSocketActive).toBe(false)
+    client.connectWebSocket()
+
+    expect(client.webSocketManager).not.toBe(manager)
+    expect(FakeWebSocket.instances).toHaveLength(2)
+    client.disconnectWebSocket()
   })
 
   it('sends the public key and target environment in the handshake', () => {

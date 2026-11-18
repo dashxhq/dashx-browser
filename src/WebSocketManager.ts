@@ -50,6 +50,8 @@ export class WebSocketManager {
   private isConnecting = false
   private shouldReconnect = true
   private lastCloseEvent: CloseEvent | null = null
+  // Gave up reconnecting or was disconnected; only `connect()` starts it again.
+  private stopped = false
   private messageQueue: QueuedMessage[] = []
   private isWaitingForPong = false
   private isNetworkOnline = true
@@ -265,6 +267,7 @@ export class WebSocketManager {
 
     this.isConnecting = true
     this.shouldReconnect = true
+    this.stopped = false
 
     try {
       this.ws = new WebSocket(this.options.url, this.options.protocols)
@@ -295,6 +298,7 @@ export class WebSocketManager {
 
   disconnect(): void {
     this.shouldReconnect = false
+    this.stopped = true
     this.clearTimers()
     this.messageQueue = []
     this.removeBrowserListeners()
@@ -324,6 +328,10 @@ export class WebSocketManager {
 
   get readyState(): number {
     return this.ws?.readyState ?? WebSocket.CLOSED
+  }
+
+  get isStopped(): boolean {
+    return this.stopped
   }
 
   get isConnected(): boolean {
@@ -442,6 +450,7 @@ export class WebSocketManager {
 
   private scheduleReconnect(): void {
     if (!this.shouldReconnect || this.reconnectAttempts >= this.options.maxReconnectAttempts) {
+      this.stopped = true
       this.options.onReconnectFailed()
       return
     }
@@ -454,6 +463,7 @@ export class WebSocketManager {
 
     // Check if we should reconnect based on the close event
     if (this.lastCloseEvent && !this.options.shouldReconnect(this.lastCloseEvent)) {
+      this.stopped = true
       this.options.onReconnectFailed()
       return
     }

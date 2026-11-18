@@ -159,6 +159,7 @@ const DashX = {
   get accountAnonymousUid() { return ensureConfigured().accountAnonymousUid },
   get identityToken() { return ensureConfigured().identityToken },
   get isWebSocketConnected() { return ensureConfigured().isWebSocketConnected },
+  get isWebSocketActive() { return ensureConfigured().isWebSocketActive },
   get webSocketManager() { return ensureConfigured().webSocketManager },
   get graphqlClient() { return ensureConfigured().graphqlClient },
   get context() { return ensureConfigured().context },
