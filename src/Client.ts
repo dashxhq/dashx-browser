@@ -510,6 +510,9 @@ class Client {
 
   #stoppedTerminally = false
 
+  // The server sent CONNECTED on the managed socket's current connection, so it took that token.
+  #managedSocketAccepted = false
+
   // The most recent manager from `createWebSocketConnection` (covers both the
   // `connectWebSocket` and the React-provider `createWebSocketConnection` paths),
   // used to send chat channel SUBSCRIBE frames.
@@ -814,11 +817,12 @@ class Client {
     // on identity change themselves — the client can't safely recreate a socket
     // whose handlers it doesn't own.
     // Also when the socket is retrying or was closed for auth: its URL still carries the old token.
-    // A refresh for the same user leaves a live socket open, since the server checks the token only
-    // as a socket connects; reconnecting would loop for an app that refetches a freshly minted token
-    // whenever its socket opens. The next reconnect uses the new token.
+    // A refresh for the same user leaves an accepted socket open, since the server checks the token
+    // only as a socket connects; reconnecting would loop for an app that refetches a freshly minted
+    // token whenever its socket opens. The next reconnect uses the new token. A socket still in its
+    // handshake reconnects: the server may yet refuse the old token it carries.
     if (tokenChanged && this.#websocketRequested) {
-      if (sameUser && this.isWebSocketActive && this.#websocketManager) {
+      if (sameUser && this.#managedSocketAccepted && this.#websocketManager?.isConnected) {
         this.#websocketManager.setUrl(this.#webSocketUrl(this.#managedQueryParams()))
       } else {
         this.logger.log('Identity token changed — reconnecting the WebSocket')
@@ -2158,6 +2162,7 @@ class Client {
 
   #openManagedWebSocket(): void {
     this.#websocketManager?.disconnect()
+    this.#managedSocketAccepted = false
 
     const options = this.#managedWebSocketOptions
     const isCurrent = () => manager === this.#websocketManager
@@ -2176,11 +2181,13 @@ class Client {
         // Not on `open`: the server accepts the upgrade before it refuses a token with 4401.
         if (message.type === WebsocketMessage.CONNECTED) {
           this.#refreshedAfterUnauthorized = false
+          this.#managedSocketAccepted = true
         }
         options.onMessage?.(message)
       },
       onClose: (event) => {
         if (isCurrent()) {
+          this.#managedSocketAccepted = false
           options.onClose?.(event)
           this.#handleManagedWebSocketClose(event)
         }

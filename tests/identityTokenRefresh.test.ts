@@ -28,13 +28,15 @@ describe('setIdentity with a new token while the socket is live', () => {
     vi.restoreAllMocks()
   })
 
-  it('keeps the socket for a refreshed token of the same user, even when every open refetches one', () => {
+  it('keeps the socket for a refreshed token of the same user, even when every accepted connection refetches one', () => {
     const client = makeClient()
     client.setIdentity('member', token('first', 7 * 24 * HOUR, user('member')))
     client.connectWebSocket({
-      onOpen: () => {
-        vi.advanceTimersByTime(1000)
-        client.setIdentity('member', token('fresh', 7 * 24 * HOUR, user('member')))
+      onMessage: (message) => {
+        if (message.type === 'CONNECTED') {
+          vi.advanceTimersByTime(1000)
+          client.setIdentity('member', token('fresh', 7 * 24 * HOUR, user('member')))
+        }
       },
     })
 
@@ -42,6 +44,39 @@ describe('setIdentity with a new token while the socket is live', () => {
 
     expect(FakeWebSocket.instances).toHaveLength(1)
     expect(latestSocket().identityToken).toContain('first')
+    client.disconnectWebSocket()
+  })
+
+  it('reconnects with a token refreshed while the socket is still connecting', () => {
+    const client = makeClient()
+    client.setIdentity('member', token('stale', 7 * 24 * HOUR, user('member')))
+    client.connectWebSocket()
+    const connecting = latestSocket()
+
+    client.setIdentity('member', token('fresh', 7 * 24 * HOUR, user('member')))
+
+    expect(connecting.readyState).toBe(FakeWebSocket.CLOSED)
+    expect(FakeWebSocket.instances).toHaveLength(2)
+    expect(latestSocket().identityToken).toContain('fresh')
+    client.disconnectWebSocket()
+  })
+
+  it('connects with a token refreshed before the server accepted the old one, which it then refuses', () => {
+    const client = makeClient()
+    vi.spyOn((client as any).logger, 'warn').mockImplementation(() => {})
+    vi.spyOn((client as any).logger, 'error').mockImplementation(() => {})
+    client.setIdentity('member', token('stale', 7 * 24 * HOUR, user('member')))
+    client.connectWebSocket()
+    const handshaking = latestSocket()
+    handshaking.open()
+
+    client.setIdentity('member', token('fresh', 7 * 24 * HOUR, user('member')))
+    handshaking.serverClose(4401)
+    latestSocket().accept()
+
+    expect(FakeWebSocket.instances).toHaveLength(2)
+    expect(latestSocket().identityToken).toContain('fresh')
+    expect(client.isWebSocketConnected).toBe(true)
     client.disconnectWebSocket()
   })
 
