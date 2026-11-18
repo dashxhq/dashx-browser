@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **A refreshed identity token for the same user no longer reconnects the socket.** Since 0.15.0, `setIdentity` with any new token reconnected the client's socket, so an app that refetches a freshly minted token whenever its socket opens (as one fetching the token with the current account does) reconnected in a loop. A new token for the same user and environment now leaves a socket the server has accepted open, since the server checks the token only when a socket connects, and the next reconnect uses it. A socket still in its handshake, a different user, a logout, a member token (whose socket the server closes at expiry) or a socket closed for auth still reconnects with the new token.
+
 ## 0.15.0
 
 ### Added

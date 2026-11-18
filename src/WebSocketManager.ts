@@ -330,6 +330,11 @@ export class WebSocketManager {
     return this.ws?.readyState ?? WebSocket.CLOSED
   }
 
+  // Takes effect on the next connection attempt; an open socket is left as it is.
+  setUrl(url: string): void {
+    this.options.url = url
+  }
+
   get isStopped(): boolean {
     return this.stopped
   }

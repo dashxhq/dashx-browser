@@ -118,20 +118,37 @@ const IDENTITY_TOKEN_RENEW_JITTER_MS = 60 * 1000
 const IDENTITY_TOKEN_MIN_RENEW_DELAY_MS = 10 * 1000
 const IDENTITY_TOKEN_RENEW_RETRY_MS = 30 * 1000
 
-// Reads `exp` without verifying the signature: only to schedule renewal, never to trust the token.
-function identityTokenExpiresAt(token: string): number | null {
-  const payload = token.split('.')[1]
+// Read without verifying the signature: only to schedule renewal and spot a refresh of the same
+// identity, never to trust the token.
+function identityTokenClaims(token: string | null): Record<string, unknown> | null {
+  const payload = token?.split('.')[1]
   if (!payload) {
     return null
   }
 
   try {
     const base64 = payload.replace(/-/g, '+').replace(/_/g, '/')
-    const { exp } = JSON.parse(globalThis.atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')))
-    return typeof exp === 'number' ? exp * 1000 : null
+    const claims = JSON.parse(globalThis.atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')))
+    return claims && typeof claims === 'object' ? claims : null
   } catch {
     return null
   }
+}
+
+function identityTokenExpiresAt(token: string): number | null {
+  const exp = identityTokenClaims(token)?.exp
+  return typeof exp === 'number' ? exp * 1000 : null
+}
+
+// The server closes a member socket when its token expires, so a member token refresh always reconnects.
+function isRefreshOfSameUser(previous: string | null, next: string | null): boolean {
+  const before = identityTokenClaims(previous)
+  const after = identityTokenClaims(next)
+  if (!before || !after || before.kind === 'MEMBER' || typeof before.uid !== 'string') {
+    return false
+  }
+  return before.kind === after.kind && before.uid === after.uid
+    && before.environment_id === after.environment_id
 }
 
 type WebSocketConnectionOptions = {
@@ -493,6 +510,9 @@ class Client {
 
   #stoppedTerminally = false
 
+  // The server sent CONNECTED on the managed socket's current connection, so it took that token.
+  #managedSocketAccepted = false
+
   // The most recent manager from `createWebSocketConnection` (covers both the
   // `connectWebSocket` and the React-provider `createWebSocketConnection` paths),
   // used to send chat channel SUBSCRIBE frames.
@@ -774,6 +794,7 @@ class Client {
     }
 
     const tokenChanged = nextToken !== undefined && nextToken !== this.#identityToken
+    const sameUser = tokenChanged && isRefreshOfSameUser(this.#identityToken, nextToken ?? null)
     if (nextUid !== undefined) {
       this.accountUid = nextUid
     }
@@ -796,9 +817,17 @@ class Client {
     // on identity change themselves — the client can't safely recreate a socket
     // whose handlers it doesn't own.
     // Also when the socket is retrying or was closed for auth: its URL still carries the old token.
+    // A refresh for the same user leaves an accepted socket open, since the server checks the token
+    // only as a socket connects; reconnecting would loop for an app that refetches a freshly minted
+    // token whenever its socket opens. The next reconnect uses the new token. A socket still in its
+    // handshake reconnects: the server may yet refuse the old token it carries.
     if (tokenChanged && this.#websocketRequested) {
-      this.logger.log('Identity token changed — reconnecting the WebSocket')
-      this.#openManagedWebSocket()
+      if (sameUser && this.#managedSocketAccepted && this.#websocketManager?.isConnected) {
+        this.#websocketManager.setUrl(this.#webSocketUrl(this.#managedQueryParams()))
+      } else {
+        this.logger.log('Identity token changed — reconnecting the WebSocket')
+        this.#openManagedWebSocket()
+      }
     }
   }
 
@@ -2133,16 +2162,13 @@ class Client {
 
   #openManagedWebSocket(): void {
     this.#websocketManager?.disconnect()
+    this.#managedSocketAccepted = false
 
     const options = this.#managedWebSocketOptions
     const isCurrent = () => manager === this.#websocketManager
     const manager: WebSocketManager = this.createWebSocketConnection({
       ...options,
-      queryParams: {
-        publicKey: this.publicKey,
-        targetEnvironment: this.targetEnvironment,
-        ...options.queryParams,
-      },
+      queryParams: this.#managedQueryParams(),
       onOpen: () => {
         if (isCurrent()) {
           options.onOpen?.()
@@ -2155,11 +2181,13 @@ class Client {
         // Not on `open`: the server accepts the upgrade before it refuses a token with 4401.
         if (message.type === WebsocketMessage.CONNECTED) {
           this.#refreshedAfterUnauthorized = false
+          this.#managedSocketAccepted = true
         }
         options.onMessage?.(message)
       },
       onClose: (event) => {
         if (isCurrent()) {
+          this.#managedSocketAccepted = false
           options.onClose?.(event)
           this.#handleManagedWebSocketClose(event)
         }
@@ -2183,6 +2211,14 @@ class Client {
     this.#websocketManager = manager
     manager.connect()
     this.#scheduleIdentityTokenRenewal()
+  }
+
+  #managedQueryParams(): Record<string, string> {
+    return {
+      publicKey: this.publicKey,
+      targetEnvironment: this.targetEnvironment,
+      ...this.#managedWebSocketOptions.queryParams,
+    }
   }
 
   #handleManagedWebSocketClose(event: CloseEvent): void {
@@ -2621,23 +2657,8 @@ class Client {
     // server identifies the visitor from it, which gates InApp Chat ownership.
     // The key is camelCase to match the other handshake params
     // (`publicKey`/`targetEnvironment`).
-    const mergedParams: Record<string, string> = { ...(options?.queryParams ?? {}) }
-    if (this.#identityToken && !mergedParams.identityToken) {
-      mergedParams.identityToken = this.#identityToken
-    }
-
-    let url = this.realtimeBaseUri
-    const paramKeys = Object.keys(mergedParams)
-    if (paramKeys.length > 0) {
-      const params = new URLSearchParams()
-      paramKeys.forEach((key) => {
-        params.append(key, mergedParams[key])
-      })
-      url += `?${params.toString()}`
-    }
-
     const wsManager = new WebSocketManager({
-      url,
+      url: this.#webSocketUrl(options?.queryParams),
       onOpen: () => {
         // Automatically subscribe to in-app messages
         this.subscribeToInAppMessages(wsManager)
@@ -2686,6 +2707,24 @@ class Client {
 
     this.#activeWebsocketManager = wsManager
     return wsManager
+  }
+
+  #webSocketUrl(queryParams?: Record<string, string>): string {
+    const mergedParams: Record<string, string> = { ...(queryParams ?? {}) }
+    if (this.#identityToken && !mergedParams.identityToken) {
+      mergedParams.identityToken = this.#identityToken
+    }
+
+    const paramKeys = Object.keys(mergedParams)
+    if (paramKeys.length === 0) {
+      return this.realtimeBaseUri
+    }
+
+    const params = new URLSearchParams()
+    paramKeys.forEach((key) => {
+      params.append(key, mergedParams[key])
+    })
+    return `${this.realtimeBaseUri}?${params.toString()}`
   }
 
   private subscribeToInAppMessages(wsManager?: WebSocketManager): void {
