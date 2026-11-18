@@ -491,6 +491,8 @@ class Client {
   // One refresh per refusal: a fresh token refused again is terminal, not a loop.
   #refreshedAfterUnauthorized = false
 
+  #stoppedTerminally = false
+
   // The most recent manager from `createWebSocketConnection` (covers both the
   // `connectWebSocket` and the React-provider `createWebSocketConnection` paths),
   // used to send chat channel SUBSCRIBE frames.
@@ -2107,7 +2109,13 @@ class Client {
       return
     }
 
-    if (this.#identityTokenProvider && !this.#identityTokenUsable()) {
+    if (this.#identityTokenProvider && (this.#stoppedTerminally || !this.#identityTokenUsable())) {
+      // A restart never reuses the refused token, and counts as the refresh: a refusal of the fresh
+      // token is terminal again.
+      if (this.#stoppedTerminally) {
+        this.#stoppedTerminally = false
+        this.#refreshedAfterUnauthorized = true
+      }
       this.#refreshIdentityToken()
       return
     }
@@ -2177,7 +2185,12 @@ class Client {
   }
 
   #handleManagedWebSocketClose(event: CloseEvent): void {
-    if (event.code !== UNAUTHORIZED_CLOSE_CODE || !this.#identityTokenProvider) {
+    if (!this.#identityTokenProvider || !isTerminalCloseCode(event.code)) {
+      return
+    }
+
+    if (event.code !== UNAUTHORIZED_CLOSE_CODE) {
+      this.#stopManagedWebSocketRetries()
       return
     }
 
@@ -2195,6 +2208,7 @@ class Client {
   // otherwise fetch a token and reopen the socket hours later.
   #stopManagedWebSocketRetries(): void {
     this.#websocketRequested = false
+    this.#stoppedTerminally = true
     this.#clearIdentityTokenRenewal()
   }
 

@@ -183,6 +183,54 @@ describe('identityTokenProvider', () => {
     client.disconnectWebSocket()
   })
 
+  it('restarts right after a terminal refusal with a fresh token, never the refused one', async () => {
+    const provider = vi.fn()
+      .mockResolvedValueOnce(token('first', 12 * HOUR))
+      .mockResolvedValueOnce(token('second', 12 * HOUR))
+      .mockResolvedValueOnce(token('third', 12 * HOUR))
+    const client = makeClient(provider)
+    vi.spyOn((client as any).logger, 'error').mockImplementation(() => {})
+    vi.spyOn((client as any).logger, 'warn').mockImplementation(() => {})
+    client.connectWebSocket()
+    await settle()
+    latestSocket().open()
+    latestSocket().serverClose(4401)
+    await settle()
+    latestSocket().open()
+    latestSocket().serverClose(4401)
+    await settle()
+
+    client.connectWebSocket()
+    await settle()
+
+    expect(provider).toHaveBeenCalledTimes(3)
+    expect(latestSocket().identityToken).toContain('third')
+
+    latestSocket().open()
+    latestSocket().serverClose(4401)
+    await settle()
+    expect(provider).toHaveBeenCalledTimes(3)
+    client.disconnectWebSocket()
+  })
+
+  it('stops renewing after any other terminal close', async () => {
+    const provider = vi.fn().mockResolvedValue(token('forbidden', 12 * HOUR))
+    const client = makeClient(provider)
+    vi.spyOn((client as any).logger, 'warn').mockImplementation(() => {})
+    vi.spyOn((client as any).logger, 'error').mockImplementation(() => {})
+    client.connectWebSocket()
+    await settle()
+    latestSocket().accept()
+    const sockets = FakeWebSocket.instances.length
+
+    latestSocket().serverClose(4403)
+    await vi.advanceTimersByTimeAsync(24 * HOUR)
+
+    expect(provider).toHaveBeenCalledTimes(1)
+    expect(FakeWebSocket.instances).toHaveLength(sockets)
+    client.disconnectWebSocket()
+  })
+
   it('refreshes again for a later refusal once a fresh token was accepted', async () => {
     const provider = vi.fn()
       .mockResolvedValueOnce(token('first', 12 * HOUR))
