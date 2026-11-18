@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import DashX, { Client } from '../src/index'
 
@@ -38,6 +38,17 @@ describe('DashX facade', () => {
     expect(standalone).toBeInstanceOf(Client)
     expect(standalone.publicKey).toBe('pk_other')
     expect(DashX.graphqlClient).not.toBe(standalone.graphqlClient)
+  })
+
+  it('connectWebSocket() via the facade passes its options to the configured instance', () => {
+    const client = DashX.configure({ publicKey: 'pk_test', targetEnvironment: 'test' })
+    const connect = vi.spyOn(client, 'connectWebSocket').mockImplementation(() => {})
+    const options = { onOpen: () => {}, queryParams: { custom: 'value' } }
+
+    DashX.connectWebSocket(options)
+
+    expect(connect).toHaveBeenCalledWith(options)
+    expect(DashX.webSocketManager).toBeNull()
   })
 
   it('setIdentity() via the facade proxies to the configured instance', () => {

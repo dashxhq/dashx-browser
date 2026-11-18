@@ -111,6 +111,43 @@ const isTerminalCloseCode = (code: number): boolean => (
   code >= TERMINAL_CLOSE_CODE_MIN && code <= TERMINAL_CLOSE_CODE_MAX
 )
 
+// Also what the server sends when a member token expires on an open socket.
+const UNAUTHORIZED_CLOSE_CODE = 4401
+const IDENTITY_TOKEN_RENEW_BEFORE_EXPIRY_MS = 5 * 60 * 1000
+const IDENTITY_TOKEN_RENEW_JITTER_MS = 60 * 1000
+const IDENTITY_TOKEN_MIN_RENEW_DELAY_MS = 10 * 1000
+const IDENTITY_TOKEN_RENEW_RETRY_MS = 30 * 1000
+
+// Reads `exp` without verifying the signature: only to schedule renewal, never to trust the token.
+function identityTokenExpiresAt(token: string): number | null {
+  const payload = token.split('.')[1]
+  if (!payload) {
+    return null
+  }
+
+  try {
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const { exp } = JSON.parse(globalThis.atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')))
+    return typeof exp === 'number' ? exp * 1000 : null
+  } catch {
+    return null
+  }
+}
+
+type WebSocketConnectionOptions = {
+  onMessage?: (_message: WebsocketMessageType) => void
+  onOpen?: () => void
+  onClose?: (_event: CloseEvent) => void
+  onError?: (_error: Event) => void
+  onReconnect?: (_attempt: number) => void
+  onReconnectFailed?: () => void
+  queryParams?: Record<string, string>
+  shouldReconnect?: boolean | ((_closeEvent: CloseEvent) => boolean)
+}
+
+// The client decides when the managed socket reconnects, so its owner passes only handlers and params.
+type ManagedWebSocketOptions = Omit<WebSocketConnectionOptions, 'shouldReconnect'>
+
 type ClientParams = {
   baseUri?: string,
   realtimeBaseUri?: string,
@@ -126,6 +163,11 @@ type ClientParams = {
   customPersonalDataProperties?: string[],
   // Runs on every tracked event before it is sent; return `null` to drop the event.
   beforeSend?: BeforeSend | BeforeSend[],
+  // Fetches an identity token from the host's backend: before the socket first connects, shortly
+  // before each token expires, and once after the server refuses one. Its tokens are never persisted,
+  // so another client on the page keeps its own. Such a client also keeps its account uid and
+  // anonymous uid in memory only, so it never acts as the page's stored visitor.
+  identityTokenProvider?: () => Promise<string>,
 }
 
 type IdentifyParams = Record<string, any>
@@ -435,6 +477,22 @@ class Client {
 
   #websocketManager: WebSocketManager | null = null
 
+  // Between `connectWebSocket` and `disconnectWebSocket`, including while a provider fetches a token.
+  #websocketRequested = false
+
+  #managedWebSocketOptions: ManagedWebSocketOptions = {}
+
+  #identityTokenProvider: (() => Promise<string>) | null
+
+  #identityTokenRefresh: Promise<void> | null = null
+
+  #identityTokenRenewalTimer: ReturnType<typeof setTimeout> | null = null
+
+  // One refresh per refusal: a fresh token refused again is terminal, not a loop.
+  #refreshedAfterUnauthorized = false
+
+  #stoppedTerminally = false
+
   // The most recent manager from `createWebSocketConnection` (covers both the
   // `connectWebSocket` and the React-provider `createWebSocketConnection` paths),
   // used to send chat channel SUBSCRIBE frames.
@@ -526,6 +584,7 @@ class Client {
     maskPersonalDataProperties = false,
     customPersonalDataProperties = [],
     beforeSend,
+    identityTokenProvider,
   }: ClientParams) {
     this.baseUri = baseUri
     this.realtimeBaseUri = realtimeBaseUri
@@ -537,6 +596,7 @@ class Client {
       ? [ ...PERSONAL_DATA_URL_PARAMS, ...customPersonalDataProperties ]
       : []
     this.#beforeSend = beforeSend
+    this.#identityTokenProvider = identityTokenProvider ?? null
     this.context = generateContext()
     this.loadIdentity()
     this.initGraphqlClient()
@@ -556,7 +616,9 @@ class Client {
     }
 
     this.#accountAnonymousUid = uid
-    setItem('accountAnonymousUid', this.#accountAnonymousUid)
+    if (!this.#identityTokenProvider) {
+      setItem('accountAnonymousUid', this.#accountAnonymousUid)
+    }
   }
 
   get accountUid(): string | null {
@@ -570,7 +632,9 @@ class Client {
       this.#accountUid = String(uid)
     }
 
-    setItem('accountUid', this.#accountUid)
+    if (!this.#identityTokenProvider) {
+      setItem('accountUid', this.#accountUid)
+    }
 
     // If WebSocket is connected and we just set an accountUid, subscribe to in-app messages
     if (this.#accountUid && this.#websocketManager?.isConnected) {
@@ -589,7 +653,9 @@ class Client {
       this.#identityToken = String(token)
     }
 
-    setItem('identityToken', this.#identityToken)
+    if (!this.#identityTokenProvider) {
+      setItem('identityToken', this.#identityToken)
+    }
   }
 
   private initGraphqlClient() {
@@ -646,6 +712,11 @@ class Client {
   }
 
   private loadIdentity() {
+    if (this.#identityTokenProvider) {
+      this.accountAnonymousUid = uuid()
+      return
+    }
+
     this.accountAnonymousUid = getItem('accountAnonymousUid') || uuid()
     this.accountUid = getItem('accountUid') || null
     this.identityToken = getItem('identityToken') || null
@@ -724,10 +795,10 @@ class Client {
     // `createWebSocketConnection` (e.g. @dashx/react's provider) must reconnect
     // on identity change themselves — the client can't safely recreate a socket
     // whose handlers it doesn't own.
-    if (tokenChanged && this.#websocketManager?.isConnected) {
-      this.logger.log('Identity token changed while WS is open — reconnecting')
-      this.disconnectWebSocket()
-      this.connectWebSocket()
+    // Also when the socket is retrying or was closed for auth: its URL still carries the old token.
+    if (tokenChanged && this.#websocketRequested) {
+      this.logger.log('Identity token changed — reconnecting the WebSocket')
+      this.#openManagedWebSocket()
     }
   }
 
@@ -2027,18 +2098,201 @@ class Client {
   }
 
   // WebSocket methods for real-time functionality
-  connectWebSocket(): void {
-    if (this.#websocketManager?.isConnected) {
+  // Handlers passed here replace earlier ones and survive every reconnect, including the ones the
+  // client makes itself for a new identity token. A no-op while the socket is active, so calling it
+  // again never resets a retrying socket's backoff; after a terminal close it starts over.
+  connectWebSocket(options?: ManagedWebSocketOptions): void {
+    if (options) {
+      this.#managedWebSocketOptions = options
+    }
+    if (this.isWebSocketActive) {
+      return
+    }
+    this.#websocketRequested = true
+
+    if (this.#identityTokenProvider && (this.#stoppedTerminally || !this.#identityTokenUsable())) {
+      // A restart never reuses the refused token, and counts as the refresh: a refusal of the fresh
+      // token is terminal again.
+      if (this.#stoppedTerminally) {
+        this.#stoppedTerminally = false
+        this.#refreshedAfterUnauthorized = true
+      }
+      this.#refreshIdentityToken()
       return
     }
 
-    this.#websocketManager = this.createWebSocketConnection()
-    this.#websocketManager.connect()
+    this.#openManagedWebSocket()
   }
 
   disconnectWebSocket(): void {
+    this.#websocketRequested = false
+    this.#clearIdentityTokenRenewal()
     this.#websocketManager?.disconnect()
     this.#websocketManager = null
+  }
+
+  #openManagedWebSocket(): void {
+    this.#websocketManager?.disconnect()
+
+    const options = this.#managedWebSocketOptions
+    const isCurrent = () => manager === this.#websocketManager
+    const manager: WebSocketManager = this.createWebSocketConnection({
+      ...options,
+      queryParams: {
+        publicKey: this.publicKey,
+        targetEnvironment: this.targetEnvironment,
+        ...options.queryParams,
+      },
+      onOpen: () => {
+        if (isCurrent()) {
+          options.onOpen?.()
+        }
+      },
+      onMessage: (message) => {
+        if (!isCurrent()) {
+          return
+        }
+        // Not on `open`: the server accepts the upgrade before it refuses a token with 4401.
+        if (message.type === WebsocketMessage.CONNECTED) {
+          this.#refreshedAfterUnauthorized = false
+        }
+        options.onMessage?.(message)
+      },
+      onClose: (event) => {
+        if (isCurrent()) {
+          options.onClose?.(event)
+          this.#handleManagedWebSocketClose(event)
+        }
+      },
+      onError: (error) => {
+        if (isCurrent()) {
+          options.onError?.(error)
+        }
+      },
+      onReconnect: (attempt) => {
+        if (isCurrent()) {
+          options.onReconnect?.(attempt)
+        }
+      },
+      onReconnectFailed: () => {
+        if (isCurrent()) {
+          options.onReconnectFailed?.()
+        }
+      },
+    })
+    this.#websocketManager = manager
+    manager.connect()
+    this.#scheduleIdentityTokenRenewal()
+  }
+
+  #handleManagedWebSocketClose(event: CloseEvent): void {
+    if (!this.#identityTokenProvider || !isTerminalCloseCode(event.code)) {
+      return
+    }
+
+    if (event.code !== UNAUTHORIZED_CLOSE_CODE) {
+      this.#stopManagedWebSocketRetries()
+      return
+    }
+
+    if (this.#refreshedAfterUnauthorized) {
+      this.logger.error('A freshly provided identity token was refused too; not retrying')
+      this.#stopManagedWebSocketRetries()
+      return
+    }
+
+    this.#refreshedAfterUnauthorized = true
+    this.#refreshIdentityToken()
+  }
+
+  // Terminal until the host calls `connectWebSocket()` again: a renewal timer left armed would
+  // otherwise fetch a token and reopen the socket hours later.
+  #stopManagedWebSocketRetries(): void {
+    this.#websocketRequested = false
+    this.#stoppedTerminally = true
+    this.#clearIdentityTokenRenewal()
+  }
+
+  #identityTokenUsable(): boolean {
+    if (!this.#identityToken) {
+      return false
+    }
+
+    const expiresAt = identityTokenExpiresAt(this.#identityToken)
+    return expiresAt === null || expiresAt - Date.now() > IDENTITY_TOKEN_MIN_RENEW_DELAY_MS
+  }
+
+  #refreshIdentityToken(retryWhileUsable = false): void {
+    const provider = this.#identityTokenProvider
+    if (!provider || this.#identityTokenRefresh) {
+      return
+    }
+
+    this.#identityTokenRefresh = Promise.resolve()
+      .then(provider)
+      .then((token) => {
+        if (!this.#websocketRequested) {
+          return
+        }
+        this.identityToken = token
+        this.#openManagedWebSocket()
+      })
+      .catch((error) => {
+        this.logger.error('Identity token provider failed:', error)
+        if (!retryWhileUsable) {
+          this.#stopManagedWebSocketRetries()
+        } else if (this.#websocketRequested && this.#identityTokenUsable()) {
+          this.#scheduleIdentityTokenRenewal(IDENTITY_TOKEN_RENEW_RETRY_MS)
+        }
+      })
+      .finally(() => {
+        this.#identityTokenRefresh = null
+      })
+  }
+
+  #scheduleIdentityTokenRenewal(delayMs?: number): void {
+    this.#clearIdentityTokenRenewal()
+    if (!this.#identityTokenProvider || !this.#identityToken) {
+      return
+    }
+
+    let delay = delayMs
+    if (delay === undefined) {
+      const expiresAt = identityTokenExpiresAt(this.#identityToken)
+      if (expiresAt === null) {
+        return
+      }
+      const remaining = expiresAt - Date.now()
+      const beforeExpiry = remaining - IDENTITY_TOKEN_RENEW_BEFORE_EXPIRY_MS
+        - Math.random() * IDENTITY_TOKEN_RENEW_JITTER_MS
+      // A short-lived token renews halfway through instead of immediately and in a loop.
+      delay = Math.max(beforeExpiry, remaining / 2, IDENTITY_TOKEN_MIN_RENEW_DELAY_MS)
+    }
+
+    this.#identityTokenRenewalTimer = setTimeout(() => {
+      this.#identityTokenRenewalTimer = null
+      this.#refreshIdentityToken(true)
+    }, delay)
+  }
+
+  #clearIdentityTokenRenewal(): void {
+    if (this.#identityTokenRenewalTimer) {
+      clearTimeout(this.#identityTokenRenewalTimer)
+      this.#identityTokenRenewalTimer = null
+    }
+  }
+
+  get webSocketManager(): WebSocketManager | null {
+    return this.#websocketManager
+  }
+
+  // Connected, connecting, retrying or fetching a token; false once closed for good.
+  get isWebSocketActive(): boolean {
+    if (!this.#websocketRequested) {
+      return false
+    }
+    return Boolean(this.#identityTokenRefresh)
+      || (this.#websocketManager !== null && !this.#websocketManager.isStopped)
   }
 
   get isWebSocketConnected(): boolean {
@@ -2360,16 +2614,7 @@ class Client {
   // owns the returned manager's lifecycle — including reconnecting it on an
   // identity-token change (`setIdentity` only auto-reconnects the
   // `connectWebSocket`-managed socket; see `setIdentity`).
-  createWebSocketConnection(options?: {
-    onMessage?: (_message: WebsocketMessageType) => void
-    onOpen?: () => void
-    onClose?: (_event: CloseEvent) => void
-    onError?: (_error: Event) => void
-    onReconnect?: (_attempt: number) => void
-    onReconnectFailed?: () => void
-    queryParams?: Record<string, string>
-    shouldReconnect?: boolean | ((_closeEvent: CloseEvent) => boolean)
-  }): WebSocketManager {
+  createWebSocketConnection(options?: WebSocketConnectionOptions): WebSocketManager {
     // Build URL with query parameters. `identityToken` is auto-injected from
     // the stored value (set via `setIdentity`) so the SDK uses the same token
     // for both GraphQL (X-Identity-Token header) and the WS handshake — the
@@ -2527,4 +2772,4 @@ class Client {
 
 export default Client
 export { WebsocketMessage, isTerminalCloseCode, TERMINAL_CLOSE_CODE_MIN, TERMINAL_CLOSE_CODE_MAX }
-export type { ClientParams, InAppMessages, WebsocketMessageType, InAppMessageData, InAppChatMessageData, SendInAppChatMessageArgs, FetchInAppChatMessagesArgs, ChatStatus, LastSenderKind, ChatConversationContext, ChatConversationTopic, AssignedGroupSummary, ChatConversationSummary, ChatIssuePropertyValue, FetchInAppChatConversationsArgs, SummarizeInAppChatConversationsArgs, FetchInAppChatConversationArgs, LoadInAppChatAgentArgs, InAppChatAgent, SummarizeInAppChatMessagesArgs, SummarizeInAppChatUnreadArgs, MarkInAppChatConversationReadArgs, ResolveInAppChatConversationArgs, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiNotification, AiAgentStarterMessage, AiAgentStarterSuggestion, DashXPushPayload, FirebaseMessaging, SubscribeOptions }
+export type { ClientParams, ManagedWebSocketOptions, WebSocketConnectionOptions, InAppMessages, WebsocketMessageType, InAppMessageData, InAppChatMessageData, SendInAppChatMessageArgs, FetchInAppChatMessagesArgs, ChatStatus, LastSenderKind, ChatConversationContext, ChatConversationTopic, AssignedGroupSummary, ChatConversationSummary, ChatIssuePropertyValue, FetchInAppChatConversationsArgs, SummarizeInAppChatConversationsArgs, FetchInAppChatConversationArgs, LoadInAppChatAgentArgs, InAppChatAgent, SummarizeInAppChatMessagesArgs, SummarizeInAppChatUnreadArgs, MarkInAppChatConversationReadArgs, ResolveInAppChatConversationArgs, ProductVariantReleaseRule, ProductVariantRelease, AiAgent, AiNotification, AiAgentStarterMessage, AiAgentStarterSuggestion, DashXPushPayload, FirebaseMessaging, SubscribeOptions }
