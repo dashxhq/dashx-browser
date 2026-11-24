@@ -118,6 +118,14 @@ const IDENTITY_TOKEN_RENEW_JITTER_MS = 60 * 1000
 const IDENTITY_TOKEN_MIN_RENEW_DELAY_MS = 10 * 1000
 const IDENTITY_TOKEN_RENEW_RETRY_MS = 30 * 1000
 
+const CLIENT_CLOSE = { code: 1000, reason: 'Disconnected by client', wasClean: true }
+
+function clientCloseEvent(): CloseEvent {
+  return typeof CloseEvent === 'undefined'
+    ? CLIENT_CLOSE as CloseEvent
+    : new CloseEvent('close', CLIENT_CLOSE)
+}
+
 // Read without verifying the signature: only to schedule renewal and spot a refresh of the same
 // identity, never to trust the token.
 function identityTokenClaims(token: string | null): Record<string, unknown> | null {
@@ -2154,10 +2162,18 @@ class Client {
   }
 
   disconnectWebSocket(): void {
+    const manager = this.#websocketManager
+    const wasOpen = manager !== null && manager.readyState !== WebSocket.CLOSED
     this.#websocketRequested = false
     this.#clearIdentityTokenRenewal()
-    this.#websocketManager?.disconnect()
+    // Dropped first, so the socket's own close event, which a browser delivers later, is ignored
+    // and the owner hears of the disconnect exactly once, below.
     this.#websocketManager = null
+    manager?.disconnect()
+
+    if (wasOpen) {
+      this.#managedWebSocketOptions.onClose?.(clientCloseEvent())
+    }
   }
 
   #openManagedWebSocket(): void {

@@ -45,8 +45,13 @@ export class FakeWebSocket {
     }
   }
 
+  // As in a browser, a close the page asks for is reported later, never during the call.
   close(): void {
-    this.serverClose(1000)
+    if (this.readyState === FakeWebSocket.CLOSED) {
+      return
+    }
+    this.readyState = FakeWebSocket.CLOSED
+    setTimeout(() => this.onclose?.({ code: 1000 } as CloseEvent), 0)
   }
 
   serverClose(code: number): void {
