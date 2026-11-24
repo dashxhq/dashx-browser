@@ -507,6 +507,10 @@ class Client {
 
   #managedWebSocketOptions: ManagedWebSocketOptions = {}
 
+  // What the current socket was opened with. `connectWebSocket(options)` on an active socket only
+  // stores its options for the next connection, so these are the handlers that socket still calls.
+  #currentSocketOptions: ManagedWebSocketOptions = {}
+
   #identityTokenProvider: (() => Promise<string>) | null
 
   #identityTokenRefresh: Promise<void> | null = null
@@ -2172,7 +2176,7 @@ class Client {
     manager?.disconnect()
 
     if (wasOpen) {
-      this.#managedWebSocketOptions.onClose?.(clientCloseEvent())
+      this.#currentSocketOptions.onClose?.(clientCloseEvent())
     }
   }
 
@@ -2181,6 +2185,7 @@ class Client {
     this.#managedSocketAccepted = false
 
     const options = this.#managedWebSocketOptions
+    this.#currentSocketOptions = options
     const isCurrent = () => manager === this.#websocketManager
     const manager: WebSocketManager = this.createWebSocketConnection({
       ...options,

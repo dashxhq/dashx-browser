@@ -292,6 +292,21 @@ describe('the managed socket', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
+  it('tells the handlers the live socket was opened with, not ones stored for the next connection', () => {
+    const onClose = vi.fn()
+    const nextOnClose = vi.fn()
+    const client = makeClient()
+    client.connectWebSocket({ onClose })
+    latestSocket().accept()
+    client.connectWebSocket({ queryParams: { custom: 'value' }, onClose: nextOnClose })
+
+    client.disconnectWebSocket()
+
+    expect(FakeWebSocket.instances).toHaveLength(1)
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(nextOnClose).not.toHaveBeenCalled()
+  })
+
   it('does not report a second close when the socket had already closed for good', () => {
     const onClose = vi.fn()
     const client = makeClient()
