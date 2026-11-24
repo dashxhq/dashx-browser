@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`disconnectWebSocket()` calls the `onClose` handler passed to `connectWebSocket()`.** The socket's own close event arrived after the client had let go of it and was dropped, so an owner tracking the connection, such as `@dashx/react`'s `isConnected`, kept showing it as connected. The handler now runs once, as `disconnectWebSocket()` returns, with code `1000`.
+
 ## 0.15.1
 
 ### Fixed

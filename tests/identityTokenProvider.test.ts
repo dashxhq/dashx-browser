@@ -275,6 +275,53 @@ describe('the managed socket', () => {
     client.disconnectWebSocket()
   })
 
+  it('tells its owner once when disconnectWebSocket() closes a live socket', () => {
+    const onClose = vi.fn()
+    const client = makeClient()
+    client.connectWebSocket({ onClose })
+    latestSocket().accept()
+
+    client.disconnectWebSocket()
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onClose.mock.calls[0][0].code).toBe(1000)
+    expect(client.isWebSocketConnected).toBe(false)
+
+    client.disconnectWebSocket()
+    vi.advanceTimersByTime(1000)
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('tells the handlers the live socket was opened with, not ones stored for the next connection', () => {
+    const onClose = vi.fn()
+    const nextOnClose = vi.fn()
+    const client = makeClient()
+    client.connectWebSocket({ onClose })
+    latestSocket().accept()
+    client.connectWebSocket({ queryParams: { custom: 'value' }, onClose: nextOnClose })
+
+    client.disconnectWebSocket()
+
+    expect(FakeWebSocket.instances).toHaveLength(1)
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(nextOnClose).not.toHaveBeenCalled()
+  })
+
+  it('does not report a second close when the socket had already closed for good', () => {
+    const onClose = vi.fn()
+    const client = makeClient()
+    vi.spyOn((client as any).logger, 'warn').mockImplementation(() => {})
+    vi.spyOn((client as any).logger, 'error').mockImplementation(() => {})
+    client.connectWebSocket({ onClose })
+    latestSocket().accept()
+    latestSocket().serverClose(4403)
+    expect(onClose).toHaveBeenCalledTimes(1)
+
+    client.disconnectWebSocket()
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
   it('sends the public key and target environment in the handshake', () => {
     const client = makeClient()
     client.connectWebSocket({ queryParams: { custom: 'value' } })
